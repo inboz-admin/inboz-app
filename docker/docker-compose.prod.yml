@@ -1,0 +1,303 @@
+version: "3.8"
+
+services:
+  # MySQL Database
+  mysql:
+    image: mysql:8.0
+    container_name: inboz-mysql-prod
+    restart: unless-stopped
+    ports:
+      - "3320:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_USER: ${DB_USERNAME}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
+    command: --default-authentication-plugin=mysql_native_password
+    networks:
+      - app-network
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: inboz-redis-prod
+    restart: unless-stopped
+    ports:
+      - "6379:6379"  # Expose Redis externally
+    volumes:
+      - redis_data:/data
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+    healthcheck:
+      test: ["CMD", "sh", "-c", "redis-cli $${REDIS_PASSWORD:+-a $$REDIS_PASSWORD} ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    command: >
+      sh -c "if [ -n \"$$REDIS_PASSWORD\" ]; then
+        redis-server --requirepass $$REDIS_PASSWORD --appendonly yes
+      else
+        redis-server --appendonly yes
+      fi"
+    networks:
+      - app-network
+
+  # NestJS Backend Server (API)
+  server:
+    image: ghcr.io/admin-ddio/email-campaign-tool-server:latest
+    container_name: inboz-server-prod
+    restart: unless-stopped
+    ports:
+      - "4000:4000"
+    environment:
+      NODE_ENV: ${NODE_ENV}
+      APP_NAME: ${APP_NAME}
+      APP_URL: ${APP_URL}
+      FRONTEND_URL: ${FRONTEND_URL}
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT}
+      DB_NAME: ${DB_NAME}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      REDIS_HOST: ${REDIS_HOST}
+      REDIS_PORT: ${REDIS_PORT}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      REDIS_URL: ${REDIS_URL}
+      BULL_BOARD_USERNAME: ${BULL_BOARD_USERNAME:-admin}
+      BULL_BOARD_PASSWORD: ${BULL_BOARD_PASSWORD:-admin}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_ACCESS_TOKEN_EXPIRATION: ${JWT_ACCESS_TOKEN_EXPIRATION}
+      JWT_REFRESH_TOKEN_EXPIRATION: ${JWT_REFRESH_TOKEN_EXPIRATION}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      GOOGLE_CALLBACK_URL: ${GOOGLE_CALLBACK_URL}
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT}
+      SMTP_USER: ${SMTP_USER}
+      SMTP_PASS: ${SMTP_PASS}
+      UPLOAD_MAX_SIZE: ${UPLOAD_MAX_SIZE}
+      UPLOAD_DEST: ${UPLOAD_DEST}
+      UPLOAD_PATH: ${UPLOAD_PATH}
+      MAX_FILE_SIZE: ${MAX_FILE_SIZE}
+      MAX_FILES: ${MAX_FILES}
+      BASE_URL: ${BASE_URL}
+      RAZOR_PAY_KEY: ${RAZOR_PAY_KEY}
+      RAZOR_PAY_SECRET: ${RAZOR_PAY_SECRET}
+      LOG_LEVEL: ${LOG_LEVEL}
+      LOG_FILE: ${LOG_FILE}
+      CORS_ORIGIN: ${CORS_ORIGIN}
+    volumes:
+      - uploads_data:/usr/src/app/uploads
+      - logs_data:/usr/src/app/logs
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - app-network
+    # deploy:
+    #   resources:
+    #     limits:
+    #       memory: 512M
+    #       cpus: "0.5"
+    #     reservations:
+    #       memory: 256M
+    #       cpus: "0.25"
+
+  # BullMQ Worker (processes background jobs)
+  # Note: container_name removed to allow scaling with --scale worker=3
+  worker:
+    image: ghcr.io/admin-ddio/email-campaign-tool-server:latest
+    restart: unless-stopped
+    command: ["sh", "-c", "sleep 30 && npm run start:worker:prod"]
+    # Simple health check: verify Node.js worker process is running
+    healthcheck:
+      test: ["CMD", "pgrep", "-f", "node.*worker.js"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    environment:
+      NODE_ENV: ${NODE_ENV}
+      APP_NAME: ${APP_NAME}
+      APP_URL: ${APP_URL}
+      FRONTEND_URL: ${FRONTEND_URL}
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT}
+      DB_NAME: ${DB_NAME}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      REDIS_HOST: ${REDIS_HOST}
+      REDIS_PORT: ${REDIS_PORT}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      REDIS_URL: ${REDIS_URL}
+      BULL_BOARD_USERNAME: ${BULL_BOARD_USERNAME:-admin}
+      BULL_BOARD_PASSWORD: ${BULL_BOARD_PASSWORD:-admin}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_ACCESS_TOKEN_EXPIRATION: ${JWT_ACCESS_TOKEN_EXPIRATION}
+      JWT_REFRESH_TOKEN_EXPIRATION: ${JWT_REFRESH_TOKEN_EXPIRATION}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      GOOGLE_CALLBACK_URL: ${GOOGLE_CALLBACK_URL}
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT}
+      SMTP_USER: ${SMTP_USER}
+      SMTP_PASS: ${SMTP_PASS}
+      UPLOAD_MAX_SIZE: ${UPLOAD_MAX_SIZE}
+      UPLOAD_DEST: ${UPLOAD_DEST}
+      UPLOAD_PATH: ${UPLOAD_PATH}
+      MAX_FILE_SIZE: ${MAX_FILE_SIZE}
+      MAX_FILES: ${MAX_FILES}
+      BASE_URL: ${BASE_URL}
+      RAZOR_PAY_KEY: ${RAZOR_PAY_KEY}
+      RAZOR_PAY_SECRET: ${RAZOR_PAY_SECRET}
+      LOG_LEVEL: ${LOG_LEVEL}
+      LOG_FILE: ${LOG_FILE}
+      CORS_ORIGIN: ${CORS_ORIGIN}
+    volumes:
+      - uploads_data:/usr/src/app/uploads
+      - logs_data:/usr/src/app/logs
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      server:
+        condition: service_started
+    networks:
+      - app-network
+    # Scale workers: docker-compose up --scale worker=3
+    # deploy:
+    #   replicas: 1
+    #   resources:
+    #     limits:
+    #       memory: 512M
+    #       cpus: "0.5"
+    #     reservations:
+    #       memory: 256M
+    #       cpus: "0.25"
+
+  # Scheduler (cron jobs - only ONE instance should run)
+  scheduler:
+    image: ghcr.io/admin-ddio/email-campaign-tool-server:latest
+    container_name: inboz-scheduler-prod
+    restart: unless-stopped
+    command: ["sh", "-c", "sleep 30 && npm run start:scheduler:prod"]
+    # Simple health check: verify Node.js scheduler process is running
+    healthcheck:
+      test: ["CMD", "pgrep", "-f", "node.*scheduler.js"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    environment:
+      NODE_ENV: ${NODE_ENV}
+      APP_NAME: ${APP_NAME}
+      APP_URL: ${APP_URL}
+      FRONTEND_URL: ${FRONTEND_URL}
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT}
+      DB_NAME: ${DB_NAME}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      REDIS_HOST: ${REDIS_HOST}
+      REDIS_PORT: ${REDIS_PORT}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      REDIS_URL: ${REDIS_URL}
+      BULL_BOARD_USERNAME: ${BULL_BOARD_USERNAME:-admin}
+      BULL_BOARD_PASSWORD: ${BULL_BOARD_PASSWORD:-admin}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_ACCESS_TOKEN_EXPIRATION: ${JWT_ACCESS_TOKEN_EXPIRATION}
+      JWT_REFRESH_TOKEN_EXPIRATION: ${JWT_REFRESH_TOKEN_EXPIRATION}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      GOOGLE_CALLBACK_URL: ${GOOGLE_CALLBACK_URL}
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT}
+      SMTP_USER: ${SMTP_USER}
+      SMTP_PASS: ${SMTP_PASS}
+      UPLOAD_MAX_SIZE: ${UPLOAD_MAX_SIZE}
+      UPLOAD_DEST: ${UPLOAD_DEST}
+      UPLOAD_PATH: ${UPLOAD_PATH}
+      MAX_FILE_SIZE: ${MAX_FILE_SIZE}
+      MAX_FILES: ${MAX_FILES}
+      BASE_URL: ${BASE_URL}
+      RAZOR_PAY_KEY: ${RAZOR_PAY_KEY}
+      RAZOR_PAY_SECRET: ${RAZOR_PAY_SECRET}
+      LOG_LEVEL: ${LOG_LEVEL}
+      LOG_FILE: ${LOG_FILE}
+      CORS_ORIGIN: ${CORS_ORIGIN}
+    volumes:
+      - uploads_data:/usr/src/app/uploads
+      - logs_data:/usr/src/app/logs
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      server:
+        condition: service_started
+    networks:
+      - app-network
+    # NOTE: Only run ONE scheduler instance to prevent duplicate cron execution
+    # deploy:
+    #   replicas: 1
+    #   resources:
+    #     limits:
+    #       memory: 256M
+    #       cpus: "0.25"
+    #     reservations:
+    #       memory: 128M
+    #       cpus: "0.1"
+
+  # React Frontend UI
+  ui:
+    image: ghcr.io/admin-ddio/email-campaign-tool-ui:latest
+    container_name: inboz-ui-prod
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /etc/letsencrypt/live/inboz.io/fullchain.pem:/etc/letsencrypt/live/inboz.io/fullchain.pem:ro
+      - /etc/letsencrypt/live/inboz.io/privkey.pem:/etc/letsencrypt/live/inboz.io/privkey.pem:ro
+    environment:
+      NODE_ENV: ${NODE_ENV}
+      VITE_API_BASE_URL: ${VITE_API_BASE_URL}
+      VITE_APP_NAME: ${VITE_APP_NAME}
+      VITE_APP_ENV: ${VITE_APP_ENV}
+      VITE_ENABLE_DEBUG: ${VITE_ENABLE_DEBUG}
+    # Simple health check: verify nginx is running
+    healthcheck:
+      test: ["CMD", "pgrep", "-f", "nginx"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - app-network
+    # deploy:
+    #   resources:
+    #     limits:
+    #       memory: 256M
+    #       cpus: "0.25"
+    #     reservations:
+    #       memory: 128M
+    #       cpus: "0.1"
+
+volumes:
+  mysql_data:
+  redis_data:
+  uploads_data:
+  logs_data:
+
+networks:
+  app-network:
+    driver: bridge

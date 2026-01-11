@@ -1,0 +1,61 @@
+# Multi-stage build for development and production
+FROM node:20-alpine AS base
+WORKDIR /usr/src/app
+COPY ui-base/package*.json ./
+RUN npm ci --only=production && npm cache clean --force
+
+# Development stage
+FROM node:20-alpine AS development
+WORKDIR /usr/src/app
+COPY ui-base/package*.json ./
+RUN npm install
+COPY ui-base/ .
+EXPOSE 3000
+CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "3000"]
+
+# Build stage
+FROM node:20-alpine AS build
+WORKDIR /usr/src/app
+
+COPY ui-base/package*.json ./
+RUN npm install
+COPY ui-base/ .
+
+# Vite automatically loads .env.production when using --mode production
+# npm run build:prod uses "vite build --mode production"
+# So .env.production from the repo will be automatically used
+RUN npm run build:prod
+
+# Production stage with nginx
+FROM nginx:alpine AS production
+WORKDIR /usr/src/app
+
+# Copy built application with proper ownership
+COPY --from=build --chown=nginx:nginx /usr/src/app/dist /usr/share/nginx/html
+
+# Copy custom nginx configuration with proper ownership
+COPY --chown=nginx:nginx nginx/nginx.conf /etc/nginx/nginx.conf
+
+# Create SSL certificate directory structure
+RUN mkdir -p /etc/letsencrypt/live/inboz.io
+
+# Create startup script to fix SSL permissions
+RUN echo '#!/bin/sh' > /start-nginx.sh && \
+  echo 'chmod 644 /etc/letsencrypt/live/inboz.io/*.pem 2>/dev/null || true' >> /start-nginx.sh && \
+  echo 'chown nginx:nginx /etc/letsencrypt/live/inboz.io/*.pem 2>/dev/null || true' >> /start-nginx.sh && \
+  echo 'exec nginx -g "daemon off;"' >> /start-nginx.sh && \
+  chmod +x /start-nginx.sh
+
+# Set proper permissions for nginx directories and create pid file
+RUN chown -R nginx:nginx /var/cache/nginx /var/log/nginx /etc/nginx/conf.d && \
+  touch /var/run/nginx.pid && \
+  chown nginx:nginx /var/run/nginx.pid
+
+# Install wget for healthcheck
+RUN apk add --no-cache wget
+
+EXPOSE 80 443
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost/ || exit 1
+
+CMD ["/start-nginx.sh"]

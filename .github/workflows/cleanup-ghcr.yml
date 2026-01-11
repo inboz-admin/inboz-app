@@ -1,0 +1,93 @@
+name: Cleanup GHCR Images
+
+on:
+  workflow_dispatch:
+    inputs:
+      package_name:
+        description: 'Package name to clean up (e.g., inboz-server)'
+        required: true
+        type: string
+      keep_latest:
+        description: 'Number of latest versions to keep'
+        required: false
+        default: '2'
+        type: string
+      dry_run:
+        description: 'Dry run (show what would be deleted without actually deleting)'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+        - 'true'
+        - 'false'
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install GitHub CLI
+        run: |
+          curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
+          echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+          sudo apt update
+          sudo apt install gh -y
+
+      - name: Authenticate with GitHub
+        run: |
+          echo "${{ secrets.GH_TOKEN }}" | gh auth login --with-token
+
+      - name: Clean up GHCR images
+        run: |
+          PACKAGE="${{ inputs.package_name }}"
+          KEEP="${{ inputs.keep_latest }}"
+          DRY_RUN="${{ inputs.dry_run }}"
+          
+          echo "Cleaning up package: $PACKAGE"
+          echo "Keeping latest: $KEEP versions"
+          echo "Dry run: $DRY_RUN"
+          
+          # Get all versions of the package
+          VERSIONS=$(gh api "/user/packages/container/$PACKAGE/versions" --jq '.[] | {id: .id, name: .name, created_at: .created_at}')
+          
+          if [ -z "$VERSIONS" ]; then
+            echo "No versions found for package: $PACKAGE"
+            exit 0
+          fi
+          
+          # Count total versions
+          TOTAL_VERSIONS=$(echo "$VERSIONS" | jq -s 'length')
+          echo "Found $TOTAL_VERSIONS total versions"
+          
+          if [ "$TOTAL_VERSIONS" -le "$KEEP" ]; then
+            echo "Only $TOTAL_VERSIONS versions found, keeping all"
+            exit 0
+          fi
+          
+          # Sort by creation date (newest first) and get versions to delete
+          VERSIONS_TO_DELETE=$(echo "$VERSIONS" | jq -s "sort_by(.created_at) | reverse | .[$KEEP:]")
+          DELETE_COUNT=$(echo "$VERSIONS_TO_DELETE" | jq 'length')
+          
+          echo "Will delete $DELETE_COUNT versions"
+          echo ""
+          
+          # Process each version to delete
+          echo "$VERSIONS_TO_DELETE" | jq -r '.[] | "\(.id)|\(.name)|\(.created_at)"' | while IFS='|' read -r version_id version_name created_at; do
+            echo "Version: $version_name (created: $created_at)"
+            
+            if [ "$DRY_RUN" = "false" ]; then
+              echo "Deleting version ID: $version_id"
+              if gh api -X DELETE "/user/packages/container/$PACKAGE/versions/$version_id"; then
+                echo "✓ Deleted successfully"
+              else
+                echo "✗ Failed to delete"
+              fi
+            else
+              echo "[DRY RUN] Would delete this version"
+            fi
+            echo ""
+          done
+          
+          echo "Cleanup completed!"

@@ -1,0 +1,603 @@
+---
+alwaysApply: true
+---
+
+# UI Principles for Email Campaign Tool
+
+## Project Overview
+This is a React 19 + TypeScript frontend application built with Vite, using modern UI libraries (Radix UI, shadcn/ui), state management (Zustand), and form handling (React Hook Form + Zod).
+
+## Architecture Patterns
+
+### 1. Project Structure
+```
+src/
+├── api/              # API service layer (one service per resource)
+├── components/        # Reusable UI components
+│   ├── ui/           # Base UI components (shadcn/ui)
+│   ├── common/       # Shared business components
+│   ├── auth/         # Authentication components
+│   └── layouts/      # Layout components
+├── pages/            # Page components (route-level)
+├── hooks/            # Custom React hooks
+├── stores/           # Zustand state stores
+├── services/         # Business logic services
+├── utils/            # Utility functions
+└── config/           # Configuration constants
+```
+
+### 2. Component Organization
+- **UI Components** (`components/ui/`): Base components from shadcn/ui (Button, Input, Dialog, etc.)
+- **Common Components** (`components/common/`): Reusable business components (DataTable, ConfirmDeleteDialog, etc.)
+- **Feature Components** (`components/{feature}/`): Feature-specific components
+- **Page Components** (`pages/`): Full page components that handle routing and data fetching
+- **Layout Components** (`components/layouts/`): Layout wrappers (DashboardLayout, etc.)
+
+### 3. API Service Pattern
+- **Base Service**: `apiService` class handles all HTTP requests with:
+  - Automatic token management (sessionStorage)
+  - Error handling with toast notifications
+  - BaseResponse type matching server format
+  - Request/response interceptors
+- **Resource Services**: Each resource has its own service class (e.g., `contactService`, `campaignService`)
+- **Service Pattern**:
+  ```typescript
+  class ContactService {
+    private baseUrl = "/contacts";
+    
+    async getContacts(params?: GetContactsParams): Promise<BaseResponse<PaginatedData<Contact>>> {
+      // Build query params
+      return apiService.get(url);
+    }
+    
+    async createContact(data: CreateContactRequest): Promise<BaseResponse<Contact>> {
+      return apiService.post(this.baseUrl, data);
+    }
+  }
+  ```
+
+### 4. State Management (Zustand)
+- **Global State**: Use Zustand stores for global application state
+- **Store Pattern**:
+  ```typescript
+  interface AppState {
+    user: User | null;
+    setUser: (user: User | null) => void;
+    // ... other state
+  }
+  
+  export const useAppStore = create<AppState>()(
+    persist(
+      (set) => ({
+        user: null,
+        setUser: (user) => set({ user }),
+      }),
+      { name: "app-store", storage: sessionStorage }
+    )
+  );
+  ```
+- **Local State**: Use React `useState` for component-specific state
+- **Server State**: Fetch data in components/pages, don't store in Zustand unless needed globally
+
+### 5. Form Handling (React Hook Form + Zod)
+- **Schema First**: Define Zod schema, then use with react-hook-form
+- **Form Pattern**:
+  ```typescript
+  const schema = z.object({
+    name: z.string().min(1, "Name is required"),
+    email: z.string().email("Invalid email"),
+  });
+  
+  type FormData = z.infer<typeof schema>;
+  
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+  } = useForm<FormData>({
+    resolver: zodResolver(schema),
+    defaultValues: { name: "", email: "" },
+  });
+  ```
+- **Form Components**: Use shadcn/ui Form components with react-hook-form integration
+- **Validation**: All validation in Zod schema, not in component logic
+
+### 6. Routing (React Router)
+- **Route Structure**: Nested routes under `/dashboard` for authenticated pages
+- **Protected Routes**: Use `ProtectedRouteWithRole` wrapper for auth + role checking
+- **Route Pattern**:
+  ```typescript
+  <Route
+    path="dashboard"
+    element={
+      <ProtectedRouteWithRole>
+        <DashboardLayout />
+      </ProtectedRouteWithRole>
+    }
+  >
+    <Route path="contacts" element={<ContactsPage />} />
+  </Route>
+  ```
+
+### 7. Data Tables (TanStack Table)
+- **Column Definition**: Define columns with type safety
+- **Server-Side Pagination**: Use `totalCount` prop for server-side pagination
+- **Table Pattern**:
+  ```typescript
+  const columns: ColumnDef<Contact>[] = [
+    {
+      accessorKey: "email",
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title="Email" />
+      ),
+    },
+  ];
+  
+  const table = useReactTable({
+    data: contacts,
+    columns,
+    getCoreRowModel: getCoreRowModel(),
+    // ... other config
+  });
+  ```
+
+### 8. Styling (Tailwind CSS)
+- **Utility Classes**: Use Tailwind utility classes for styling
+- **Component Variants**: Use `cn()` utility (clsx + tailwind-merge) for conditional classes
+- **Theme Support**: Dark/light theme via `next-themes`
+- **Responsive Design**: Mobile-first approach with Tailwind breakpoints
+
+### 9. Component Library (Radix UI + shadcn/ui)
+- **Base Components**: All UI components from `components/ui/` (shadcn/ui)
+- **Accessibility**: Radix UI provides accessible primitives
+- **Composition**: Compose complex components from base UI components
+- **Customization**: Use Tailwind classes to customize shadcn/ui components
+
+### 10. Error Handling
+- **API Errors**: Handled in `apiService` with toast notifications
+- **Form Errors**: Displayed via react-hook-form `errors` object
+- **Toast Notifications**: Use `sonner` for user feedback
+- **Error Pattern**:
+  ```typescript
+  try {
+    const response = await contactService.createContact(data);
+    if (response.success) {
+      toast.success("Contact created successfully");
+    } else {
+      toast.error(response.message || "Failed to create contact");
+    }
+  } catch (error) {
+    toast.error("An error occurred");
+  }
+  ```
+
+## Development Principles
+
+### KISS (Keep It Simple, Stupid)
+- **Simple Components**: Keep components focused and single-purpose
+- **Avoid Over-Engineering**: Don't add abstractions unless needed
+- **Readable Code**: Code should be self-explanatory
+- **Example**:
+  ```typescript
+  // ✅ Simple and clear
+  const handleDelete = async (id: string) => {
+    await contactService.deleteContact(id);
+    toast.success("Contact deleted");
+    refetch();
+  };
+  
+  // ❌ Over-engineered
+  const handleDelete = async (id: string) => {
+    await contactDeletionStrategyFactory
+      .createStrategy('soft-delete')
+      .execute(id, { notify: true, refetch: true });
+  };
+  ```
+
+### DRY (Don't Repeat Yourself)
+- **Reusable Components**: Extract common UI patterns into components
+- **Shared Hooks**: Create custom hooks for repeated logic
+- **Utility Functions**: Extract common functions to `utils/`
+- **Service Layer**: Centralize API calls in service classes
+- **Example**:
+  ```typescript
+  // ✅ DRY - Reusable hook
+  export function useContacts() {
+    const [contacts, setContacts] = useState<Contact[]>([]);
+    const [loading, setLoading] = useState(true);
+    
+    const fetchContacts = async () => {
+      setLoading(true);
+      const response = await contactService.getContacts();
+      if (response.success) setContacts(response.data.data);
+      setLoading(false);
+    };
+    
+    return { contacts, loading, fetchContacts };
+  }
+  
+  // ❌ Not DRY - Duplicated logic
+  // Same fetch logic repeated in multiple components
+  ```
+
+### Performance Optimization
+
+#### React Performance
+- **Memoization**: Use `useMemo` for expensive calculations
+- **Callback Memoization**: Use `useCallback` for event handlers passed to children
+- **Component Memoization**: Use `React.memo` for expensive components
+- **Lazy Loading**: Use `React.lazy` and `Suspense` for code splitting
+- **Virtualization**: Use virtual lists for large datasets (react-window, react-virtual)
+
+#### Rendering Optimization
+- **Avoid Unnecessary Renders**: 
+  ```typescript
+  // ✅ Memoize expensive computations
+  const filteredContacts = useMemo(
+    () => contacts.filter(c => c.status === 'active'),
+    [contacts]
+  );
+  
+  // ✅ Memoize callbacks
+  const handleClick = useCallback((id: string) => {
+    // handler logic
+  }, [dependencies]);
+  ```
+
+#### Data Fetching Optimization
+- **Debouncing**: Debounce search inputs to reduce API calls
+- **Pagination**: Always paginate large datasets (server-side)
+- **Caching**: Consider caching frequently accessed data
+- **Parallel Fetching**: Use `Promise.all()` for independent requests
+- **Example**:
+  ```typescript
+  // ✅ Debounced search
+  const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
+  
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+  
+  useEffect(() => {
+    if (debouncedSearchTerm) {
+      fetchContacts({ search: debouncedSearchTerm });
+    }
+  }, [debouncedSearchTerm]);
+  ```
+
+#### Big O Considerations
+- **Array Operations**: 
+  - `find()`: O(n) - use Map for O(1) lookups when possible
+  - `filter()`: O(n) - acceptable for reasonable sizes
+  - `map()`: O(n) - acceptable for rendering
+- **Object Lookups**: O(1) - prefer object/Map lookups over array searches
+- **Example**:
+  ```typescript
+  // ❌ O(n²) - Nested loops
+  const enrichedContacts = contacts.map(contact => {
+    const list = contactLists.find(list => list.id === contact.listId);
+    return { ...contact, listName: list?.name };
+  });
+  
+  // ✅ O(n) - Map lookup
+  const listMap = new Map(contactLists.map(list => [list.id, list]));
+  const enrichedContacts = contacts.map(contact => {
+    const list = listMap.get(contact.listId);
+    return { ...contact, listName: list?.name };
+  });
+  ```
+
+### Code Organization
+
+#### File Naming
+- **Components**: PascalCase (e.g., `ContactModal.tsx`)
+- **Hooks**: camelCase with `use` prefix (e.g., `useAuth.ts`)
+- **Services**: camelCase (e.g., `contactService.ts`)
+- **Utils**: camelCase (e.g., `csvExport.ts`)
+- **Types**: camelCase with `Types` suffix (e.g., `contactTypes.ts`)
+
+#### Component Structure
+```typescript
+// 1. Imports (external, @/, relative)
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { contactService } from "@/api/contactService";
+
+// 2. Types/Interfaces
+interface ContactModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+}
+
+// 3. Component
+export default function ContactModal({ isOpen, onClose }: ContactModalProps) {
+  // 4. State
+  const [loading, setLoading] = useState(false);
+  
+  // 5. Hooks
+  const { user } = useAppStore();
+  
+  // 6. Handlers
+  const handleSubmit = async (data: FormData) => {
+    // handler logic
+  };
+  
+  // 7. Effects
+  useEffect(() => {
+    // effect logic
+  }, []);
+  
+  // 8. Render
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      {/* JSX */}
+    </Dialog>
+  );
+}
+```
+
+#### TypeScript Best Practices
+- **Type Safety**: Always type props, state, and function parameters
+- **Avoid `any`**: Use `unknown` or proper types instead
+- **Type Inference**: Let TypeScript infer types when obvious
+- **Generic Types**: Use generics for reusable components/functions
+- **Example**:
+  ```typescript
+  // ✅ Proper typing
+  interface Contact {
+    id: string;
+    email: string;
+    firstName: string;
+  }
+  
+  const [contact, setContact] = useState<Contact | null>(null);
+  
+  // ❌ Avoid any
+  const [contact, setContact] = useState<any>(null);
+  ```
+
+## Common Patterns & Scenarios
+
+### Creating a New Page
+1. Create page component in `pages/{feature}/{Feature}Page.tsx`
+2. Define columns in `pages/{feature}/columns.tsx` (if using table)
+3. Create modal/form component if needed
+4. Add route in `App.tsx`
+5. Add navigation link in sidebar if needed
+
+### Creating a New API Service
+1. Create service file in `api/{resource}Service.ts`
+2. Create types file in `api/{resource}Types.ts`
+3. Export from `api/index.ts`
+4. Use `apiService` for HTTP requests
+5. Follow BaseResponse pattern
+
+### Form Pattern
+```typescript
+// 1. Define schema
+const schema = z.object({
+  name: z.string().min(1, "Required"),
+  email: z.string().email("Invalid email"),
+});
+
+type FormData = z.infer<typeof schema>;
+
+// 2. Use form hook
+const form = useForm<FormData>({
+  resolver: zodResolver(schema),
+  defaultValues: { name: "", email: "" },
+});
+
+// 3. Handle submit
+const onSubmit = async (data: FormData) => {
+  const response = await service.create(data);
+  if (response.success) {
+    toast.success("Created successfully");
+    onClose();
+  }
+};
+
+// 4. Render form
+<form onSubmit={form.handleSubmit(onSubmit)}>
+  <FormField
+    control={form.control}
+    name="name"
+    render={({ field }) => <Input {...field} />}
+  />
+</form>
+```
+
+### Data Table Pattern
+```typescript
+// 1. Define columns
+const columns: ColumnDef<Contact>[] = [
+  {
+    accessorKey: "email",
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Email" />
+    ),
+  },
+];
+
+// 2. Setup table
+const table = useReactTable({
+  data: contacts,
+  columns,
+  getCoreRowModel: getCoreRowModel(),
+  getSortedRowModel: getSortedRowModel(),
+  getFilteredRowModel: getFilteredRowModel(),
+  state: { sorting, columnFilters },
+  onSortingChange: setSorting,
+  onColumnFiltersChange: setColumnFilters,
+});
+
+// 3. Render table
+<DataTable table={table} />
+<DataTablePagination table={table} totalCount={totalItems} />
+```
+
+### Modal/Dialog Pattern
+```typescript
+const [isOpen, setIsOpen] = useState(false);
+
+<Dialog open={isOpen} onOpenChange={setIsOpen}>
+  <DialogContent>
+    <DialogHeader>
+      <DialogTitle>Title</DialogTitle>
+      <DialogDescription>Description</DialogDescription>
+    </DialogHeader>
+    {/* Content */}
+  </DialogContent>
+</Dialog>
+```
+
+### Protected Route Pattern
+```typescript
+<Route
+  path="dashboard/contacts"
+  element={
+    <ProtectedRouteWithRole>
+      <ContactsPage />
+    </ProtectedRouteWithRole>
+  }
+/>
+```
+
+## Best Practices
+
+### Core Principles
+1. **KISS**: Keep components simple and focused
+2. **DRY**: Extract reusable logic into hooks/components/utils
+3. **Performance**: Optimize renders, memoize expensive operations
+4. **Type Safety**: Always use TypeScript types, avoid `any`
+
+### Component Practices
+5. **Single Responsibility**: Each component should do one thing well
+6. **Composition**: Compose complex UIs from simple components
+7. **Props Interface**: Always define props interface/type
+8. **Default Props**: Use default values for optional props
+9. **Error Boundaries**: Wrap error-prone components in error boundaries
+10. **Loading States**: Always show loading states for async operations
+
+### State Management
+11. **Local First**: Use local state unless data is needed globally
+12. **Zustand for Global**: Use Zustand only for truly global state
+13. **Server State**: Fetch in components, don't store in Zustand unless needed globally
+14. **State Updates**: Use functional updates for state based on previous state
+
+### API & Data
+15. **Service Layer**: Always use service classes for API calls
+16. **Error Handling**: Handle errors gracefully with user feedback
+17. **Loading States**: Show loading indicators during API calls
+18. **Optimistic Updates**: Consider optimistic updates for better UX
+19. **Pagination**: Always paginate large datasets
+20. **Debouncing**: Debounce search inputs and filters
+
+### Forms
+21. **Schema Validation**: Use Zod schemas for all form validation
+22. **react-hook-form**: Always use react-hook-form for forms
+23. **Error Display**: Show validation errors clearly
+24. **Loading States**: Disable submit button during submission
+
+### Styling
+25. **Tailwind First**: Use Tailwind utility classes
+26. **Component Variants**: Use `cn()` for conditional classes
+27. **Responsive**: Mobile-first responsive design
+28. **Theme Support**: Ensure components work in dark/light themes
+29. **Accessibility**: Use semantic HTML and ARIA attributes
+
+### Performance
+30. **Memoization**: Memoize expensive computations and callbacks
+31. **Code Splitting**: Use lazy loading for route-level components
+32. **Virtual Lists**: Use virtualization for large lists
+33. **Image Optimization**: Optimize images (lazy loading, proper formats)
+34. **Bundle Size**: Monitor and optimize bundle size
+
+## Anti-Patterns to Avoid
+
+### Architecture
+- ❌ Storing server data in Zustand unnecessarily
+- ❌ Duplicating API logic across components
+- ❌ Mixing business logic in components
+- ❌ Not using service layer for API calls
+- ❌ Over-engineering simple components
+
+### Performance
+- ❌ Not memoizing expensive computations
+- ❌ Creating new functions/objects in render
+- ❌ Fetching all data instead of paginating
+- ❌ Not debouncing search inputs
+- ❌ Unnecessary re-renders from state updates
+- ❌ Nested loops without optimization (O(n²))
+
+### TypeScript
+- ❌ Using `any` type
+- ❌ Not typing component props
+- ❌ Ignoring TypeScript errors
+- ❌ Using type assertions unnecessarily
+
+### React
+- ❌ Mutating state directly
+- ❌ Missing dependencies in useEffect
+- ❌ Not cleaning up effects (timers, subscriptions)
+- ❌ Creating components inside render
+- ❌ Using index as key when items can reorder
+
+### Forms
+- ❌ Not using react-hook-form
+- ❌ Validating in component logic instead of schema
+- ❌ Not showing loading states
+- ❌ Not handling errors
+
+### Styling
+- ❌ Inline styles when Tailwind classes work
+- ❌ Not making components responsive
+- ❌ Ignoring accessibility
+- ❌ Not supporting dark mode
+
+## Technology Stack
+
+### Core
+- **React 19**: UI library
+- **TypeScript**: Type safety
+- **Vite**: Build tool and dev server
+
+### UI & Styling
+- **Tailwind CSS**: Utility-first CSS
+- **Radix UI**: Accessible component primitives
+- **shadcn/ui**: Component library built on Radix
+- **Lucide React**: Icon library
+- **next-themes**: Theme management
+
+### State & Data
+- **Zustand**: State management
+- **React Hook Form**: Form handling
+- **Zod**: Schema validation
+- **TanStack Table**: Data tables
+
+### Routing & Navigation
+- **React Router**: Client-side routing
+
+### API & Communication
+- **Fetch API**: HTTP requests (via apiService)
+- **Socket.io Client**: Real-time communication
+
+### Utilities
+- **date-fns**: Date manipulation
+- **clsx + tailwind-merge**: Class name utilities
+- **sonner**: Toast notifications
+
+## Environment Variables
+- `VITE_API_BASE_URL`: API base URL
+- `VITE_GOOGLE_CLIENT_ID`: Google OAuth client ID
+- `VITE_GOOGLE_REDIRECT_URI`: OAuth redirect URI
+
+## Build & Development
+- **Dev Server**: `npm run dev` (Vite dev server on port 3000)
+- **Build**: `npm run build` (production build)
+- **Preview**: `npm run preview` (preview production build)
+- **Lint**: `npm run lint` (ESLint)

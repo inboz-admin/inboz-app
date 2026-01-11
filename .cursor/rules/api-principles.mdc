@@ -1,0 +1,568 @@
+---
+alwaysApply: true
+---
+
+## Project Overview
+This is a NestJS-based email campaign management system with multi-tenancy, RBAC, queue processing, and comprehensive audit logging.
+
+## Architecture Patterns
+
+### 1. Module Structure
+- **Resources**: Each domain resource (users, organizations, campaigns, etc.) follows a consistent structure:
+  - `{resource}.module.ts` - Module definition
+  - `{resource}.controller.ts` - HTTP endpoints
+  - `{resource}.service.ts` - Business logic
+  - `{resource}.repository.ts` - Data access (extends BaseRepository)
+  - `entities/{resource}.entity.ts` - Sequelize model (extends BaseEntity)
+  - `dto/` - Data Transfer Objects with validation
+  - `services/` - Additional domain-specific services (e.g., validation services)
+
+### 2. Base Classes Pattern
+- **BaseEntity**: All entities extend `BaseEntity` which provides:
+  - `id` (UUID, CHAR(36))
+  - `createdAt`, `updatedAt`, `deletedAt` (soft delete support)
+  - `createdBy`, `updatedBy`, `deletedBy` (audit fields)
+  
+- **BaseRepository**: All repositories extend `BaseRepository<T>` which provides:
+  - CRUD operations with tenant filtering
+  - Automatic organization-based filtering (unless SUPERADMIN)
+  - Pagination support
+  - Search functionality
+  - Soft delete support
+  - Audit field management (createdBy, updatedBy, deletedBy)
+  
+- **BaseService**: Services extend `BaseService<T>` which provides:
+  - Standard CRUD operations
+  - Transaction support
+  - Soft/hard delete methods
+  - Restore functionality
+
+### 3. Multi-Tenancy Pattern
+- **Automatic Tenant Filtering**: All repository queries automatically filter by `organizationId` from user context
+- **SUPERADMIN Bypass**: Only users with role `SUPERADMIN` can bypass tenant filtering
+- **Organization Context**: Retrieved via `UserContextService.getCurrentUser().organizationId`
+- **Tenant-Aware Queries**: Always use repository methods (not direct model queries) to ensure tenant filtering
+
+### 4. RBAC (Role-Based Access Control)
+- **Permission Decorators**: Use `@RequirePermission(ResourceName, ActionName)` on controller methods
+- **Permission Guard**: `PermissionsGuard` automatically checks permissions from decorators
+- **Role Service**: Permissions are stored in roles and checked dynamically
+- **Resources & Actions**: Defined in enums (`resources.enum.ts`, `actions.enum.ts`)
+
+### 5. DTO Validation Pattern
+- **class-validator**: All DTOs use decorators from `class-validator`
+- **class-transformer**: Use `@Transform()` for data transformation (e.g., name capitalization)
+- **BaseQueryDto**: Query DTOs extend `BaseQueryDto` for pagination/search
+- **Validation Config**: Global validation pipe configured in `validation.enum.ts`
+- **Custom Validators**: Create validation services for complex business rules (e.g., `OrganizationValidator`)
+
+### 6. Error Handling
+- **BaseExceptionFilter**: Global exception filter that:
+  - Handles Sequelize errors (validation, unique constraints, etc.)
+  - Handles HTTP exceptions (NotFound, Conflict, etc.)
+  - Handles network errors
+  - Provides structured error responses with `BaseResponse` format
+  - Logs errors with structured data for centralized logging
+  
+- **AppError**: Custom error class for business logic errors
+- **Error Types**: BUSINESS, TECHNICAL, VALIDATION, DATABASE
+
+### 7. Response Format
+- **BaseResponse Interface**: All responses follow this structure:
+  ```typescript
+  {
+    success: boolean;
+    statusCode: number;
+    message: string;
+    module: ModuleNames;
+    data?: T;
+    error?: {
+      type: ErrorTypes;
+      code: string;
+      details: any;
+    };
+    timestamp: string;
+    requestId: string;
+  }
+  ```
+- **SuccessInterceptor**: Automatically wraps successful responses
+- **Request ID**: Middleware adds unique request ID to all requests
+
+### 8. Transaction Management
+- **TransactionManager**: Service for managing database transactions
+- **Usage Pattern**:
+  ```typescript
+  return this.transactionManager.execute(async (transaction) => {
+    // Multiple operations within transaction
+  });
+  ```
+- **Always use transactions** for multi-step operations (create + related records, updates with validation, etc.)
+
+### 9. Queue System (BullMQ)
+- **Queue Services**: Extend `BaseQueueService` for job creation
+- **Processors**: Handle job processing (run in separate worker process)
+- **Queue Registration**: Queues registered in `BullModule` (API) and `WorkerBullModule` (Workers)
+- **Separation**: Queue services in API server, processors in worker process
+- **Common Queues**: email-queue, campaign-processor-queue, bounce-detection-queue, etc.
+
+### 10. Audit Logging
+- **AuditLogMiddleware**: Automatically logs all API requests
+- **Auto-Audit Decorator**: `@AutoAudit()` for automatic audit trail on entity changes
+- **Audit Fields**: createdBy, updatedBy, deletedBy automatically set from user context
+
+### 11. User Context
+- **UserContextService**: Global service providing current user information
+- **UserContextInterceptor**: Extracts user from JWT and sets in context
+- **Access Pattern**: `@CurrentUser()` decorator in controllers, `userContextService.getCurrentUser()` in services
+
+### 12. Database Patterns
+- **Sequelize with TypeScript**: Use `sequelize-typescript` decorators
+- **Model Registration**: All models registered in `DatabaseModule`
+- **Migrations**: Sequelize CLI migrations in `migration-config/migrations/`
+- **Soft Deletes**: Use `paranoid: true` in models, `deletedAt` field
+- **Relations**: Define associations in entity files
+
+### 13. Configuration
+- **ConfigModule**: NestJS ConfigModule for environment variables
+- **Configuration Files**: Organized in `configuration/` directory
+- **Module Pattern**: Each configuration (database, JWT, email, etc.) has its own module
+
+### 14. API Routing
+- **Route Registration**: Routes defined in `routes/api.routes.ts`
+- **Path Prefix**: All API routes under `/api/v1`
+- **Module Routing**: Use `RouterModule.register(routes)` in `AppModule`
+
+## Development Principles
+
+### KISS (Keep It Simple, Stupid)
+- **Simplicity First**: Prefer simple, straightforward solutions over complex ones
+- **Avoid Over-Engineering**: Don't add abstractions or patterns unless they solve a real problem
+- **Readable Code**: Code should be self-explanatory; if it needs extensive comments, simplify it
+- **Single Responsibility**: Each function/class should do one thing well
+- **Clear Naming**: Use descriptive names that explain intent, not implementation details
+- **Example**: 
+  ```typescript
+  // ✅ Simple and clear
+  async findUserById(id: string) {
+    return this.repository.findById(id);
+  }
+  
+  // ❌ Over-engineered
+  async findUserById(id: string) {
+    return this.userFinderStrategyFactory
+      .createStrategy('id-based')
+      .execute(id, this.repository);
+  }
+  ```
+
+### DRY (Don't Repeat Yourself)
+- **Reuse Base Classes**: Always extend BaseEntity, BaseRepository, BaseService
+- **Extract Common Logic**: Move repeated code to shared utilities or base classes
+- **Single Source of Truth**: Define constants, enums, and configurations once
+- **Shared Services**: Use CommonModule services (UserContextService, TransactionManager, etc.)
+- **Validation Reuse**: Create reusable validators and validation services
+- **Example**:
+  ```typescript
+  // ✅ DRY - Reuse base repository
+  export class UserRepository extends BaseRepository<User> {
+    // Only add user-specific methods here
+  }
+  
+  // ❌ Not DRY - Duplicating base functionality
+  export class UserRepository {
+    async create() { /* duplicate code */ }
+    async findAll() { /* duplicate code */ }
+  }
+  ```
+
+### ACID (Database Transactions)
+- **Atomicity**: All operations in a transaction succeed or all fail
+- **Consistency**: Database remains in valid state after transaction
+- **Isolation**: Concurrent transactions don't interfere with each other
+- **Durability**: Committed changes persist even after system failure
+- **Always Use Transactions** for:
+  - Multi-step operations (create + related records)
+  - Updates that depend on previous reads
+  - Operations that must be all-or-nothing
+  - Financial operations (subscriptions, payments)
+- **Transaction Pattern**:
+  ```typescript
+  // ✅ ACID compliant
+  return this.transactionManager.execute(async (transaction) => {
+    const user = await this.userRepository.create(userData, transaction);
+    await this.organizationRepository.update(
+      { id: orgId },
+      { userId: user.id },
+      transaction
+    );
+    return user; // All or nothing
+  });
+  
+  // ❌ Not ACID - partial failures possible
+  const user = await this.userRepository.create(userData);
+  await this.organizationRepository.update({ id: orgId }, { userId: user.id });
+  // If second operation fails, user exists but org not updated
+  ```
+
+## Performance Optimization & Big O Notation
+
+### Algorithm Complexity Analysis
+- **Always Consider Big O**: Analyze time and space complexity of algorithms
+- **Target Complexity**:
+  - **O(1)**: Constant time - ideal for lookups, cache access
+  - **O(log n)**: Logarithmic - acceptable for searches, tree operations
+  - **O(n)**: Linear - acceptable for single-pass operations
+  - **O(n log n)**: Linearithmic - acceptable for sorting, some searches
+  - **O(n²)**: Quadratic - avoid nested loops, optimize when possible
+  - **O(2ⁿ)**: Exponential - avoid at all costs
+
+### Database Query Optimization
+- **Index Strategy**: 
+  - Add indexes on frequently queried fields (WHERE, JOIN, ORDER BY)
+  - Composite indexes for multi-column queries
+  - Avoid over-indexing (slows writes)
+- **Query Efficiency**:
+  ```typescript
+  // ✅ O(log n) with index - Efficient
+  await this.repository.findOne({ where: { email: 'user@example.com' } });
+  // Requires index on email field
+  
+  // ❌ O(n) - Full table scan - Inefficient
+  await this.repository.findAll(); // Then filter in memory
+  ```
+- **Avoid N+1 Queries**:
+  ```typescript
+  // ❌ N+1 Problem - O(n) queries
+  const users = await this.userRepository.findAll();
+  for (const user of users) {
+    user.organization = await this.orgRepository.findById(user.orgId);
+  }
+  
+  // ✅ Single Query with JOIN - O(1) query
+  const users = await this.userRepository.findAll({
+    include: [{ model: Organization }]
+  });
+  ```
+- **Pagination**: Always paginate large datasets (O(n) → O(limit))
+- **Selective Fields**: Use `attributes` to fetch only needed columns
+- **Batch Operations**: Use bulk operations instead of loops
+  ```typescript
+  // ❌ O(n) individual operations
+  for (const item of items) {
+    await this.repository.create(item);
+  }
+  
+  // ✅ O(1) bulk operation
+  await this.repository.bulkCreate(items);
+  ```
+
+### Caching Strategy
+- **Cache Frequently Accessed Data**: 
+  - User permissions, roles
+  - Organization settings
+  - Static configuration
+- **Cache Invalidation**: Implement proper cache invalidation strategies
+- **Cache Complexity**: 
+  - Cache hit: O(1)
+  - Cache miss: O(1) + original operation cost
+- **Example**:
+  ```typescript
+  // ✅ O(1) with cache
+  async getUserPermissions(userId: string) {
+    const cached = await this.cache.get(`permissions:${userId}`);
+    if (cached) return cached; // O(1)
+    const permissions = await this.fetchPermissions(userId); // O(n) or O(log n)
+    await this.cache.set(`permissions:${userId}`, permissions);
+    return permissions;
+  }
+  ```
+
+### Loop Optimization
+- **Avoid Nested Loops**: O(n²) or worse
+  ```typescript
+  // ❌ O(n²) - Nested loops
+  for (const user of users) {
+    for (const contact of contacts) {
+      if (user.id === contact.userId) {
+        // process
+      }
+    }
+  }
+  
+  // ✅ O(n) - Use Map/Set for lookups
+  const userMap = new Map(users.map(u => [u.id, u]));
+  for (const contact of contacts) {
+    const user = userMap.get(contact.userId); // O(1) lookup
+    if (user) { /* process */ }
+  }
+  ```
+- **Early Exit**: Break/return early when possible
+- **Lazy Evaluation**: Use generators for large datasets
+- **Parallel Processing**: Use Promise.all() for independent operations
+  ```typescript
+  // ❌ Sequential - O(n) time
+  for (const item of items) {
+    await this.processItem(item);
+  }
+  
+  // ✅ Parallel - O(1) time (bounded by slowest operation)
+  await Promise.all(items.map(item => this.processItem(item)));
+  ```
+
+### Memory Optimization
+- **Stream Large Files**: Don't load entire files into memory
+- **Limit Result Sets**: Always use pagination, never fetch all records
+- **Garbage Collection**: Avoid memory leaks (remove event listeners, clear intervals)
+- **Object Pooling**: Reuse objects when possible (for high-frequency operations)
+
+### Queue & Async Processing
+- **Offload Heavy Operations**: Use queues for operations > 100ms
+- **Batch Processing**: Group similar operations together
+- **Rate Limiting**: Implement rate limiting to prevent resource exhaustion
+- **Example**:
+  ```typescript
+  // ❌ Synchronous - Blocks request - O(n) time
+  for (const email of emails) {
+    await this.sendEmail(email); // Slow operation
+  }
+  
+  // ✅ Asynchronous - Returns immediately - O(1) time
+  for (const email of emails) {
+    await this.emailQueue.add('send-email', { email });
+  }
+  ```
+
+### Code Efficiency Guidelines
+1. **Measure First**: Profile before optimizing (premature optimization is root of all evil)
+2. **Optimize Hot Paths**: Focus on frequently executed code
+3. **Database First**: Database queries are usually the bottleneck
+4. **Use Appropriate Data Structures**:
+   - Arrays: O(n) search, O(1) append
+   - Sets/Maps: O(1) lookup, O(1) insert
+   - Trees: O(log n) operations
+5. **Avoid Premature Optimization**: Write clear code first, optimize when needed
+6. **Monitor Performance**: Use logging and monitoring to identify bottlenecks
+
+## Coding Standards
+
+### TypeScript
+- **Strict Mode**: Enabled with some relaxations (`strictNullChecks: false`, `noImplicitAny: false`)
+- **Decorators**: Use experimental decorators for NestJS
+- **Types**: Prefer explicit types, avoid `any` when possible
+- **Interfaces**: Use interfaces for DTOs, entities use classes
+
+### Code Style
+- **Prettier**: Single quotes, trailing commas
+- **Naming**:
+  - Classes: PascalCase (e.g., `OrganizationsService`)
+  - Files: kebab-case (e.g., `organizations.service.ts`)
+  - Methods: camelCase (e.g., `createOrganization`)
+  - Constants: UPPER_SNAKE_CASE
+  - Enums: PascalCase with PascalCase values
+
+### File Organization
+- **One Class Per File**: Each class in its own file
+- **Barrel Exports**: Use `index.ts` for clean imports when appropriate
+- **Grouped Imports**: Group imports: external, @nestjs, src/
+
+### DTOs
+- **Validation Decorators**: Always use appropriate validators
+- **Transform Decorators**: Use `@Transform()` for data sanitization
+- **Optional Fields**: Mark optional fields with `@IsOptional()`
+- **Naming**: `Create{Resource}Dto`, `Update{Resource}Dto`, `{Resource}QueryDto`
+
+### Services
+- **Dependency Injection**: Use constructor injection
+- **Logger**: Use NestJS Logger with context: `private readonly logger = new Logger(ServiceName.name)`
+- **Error Handling**: Throw appropriate HTTP exceptions (NotFoundException, BadRequestException, etc.)
+- **Transaction Support**: Accept optional `transaction` parameter for operations
+
+### Controllers
+- **Decorators**: Use NestJS decorators (`@Get()`, `@Post()`, `@Body()`, etc.)
+- **DTOs**: Always use DTOs for request/response validation
+- **Permissions**: Protect routes with `@RequirePermission()` decorator
+- **Current User**: Use `@CurrentUser()` decorator to get authenticated user
+
+### Repositories
+- **Extend BaseRepository**: Always extend `BaseRepository<T>`
+- **Inject Model**: Use `@InjectModel(Entity)` decorator
+- **User Context**: Inject `UserContextService` for tenant filtering
+- **Custom Methods**: Add domain-specific query methods as needed
+
+### Entities
+- **Extend BaseEntity**: All entities extend `BaseEntity`
+- **Decorators**: Use Sequelize decorators (`@Table`, `@Column`, etc.)
+- **Relations**: Define associations with `@HasMany`, `@BelongsTo`, etc.
+- **Indexes**: Add indexes for frequently queried fields
+
+## Common Patterns & Scenarios
+
+### Creating a New Resource
+1. Create entity extending `BaseEntity` in `entities/`
+2. Create repository extending `BaseRepository` in `{resource}.repository.ts`
+3. Create service extending `BaseService` in `{resource}.service.ts`
+4. Create DTOs in `dto/` directory
+5. Create controller in `{resource}.controller.ts`
+6. Create module in `{resource}.module.ts`
+7. Register route in `routes/api.routes.ts`
+8. Register module in `app.module.ts`
+9. Add entity to `DatabaseModule` imports
+
+### Soft Delete Pattern
+```typescript
+// Soft delete (sets deletedAt)
+await this.repository.delete({ id }, transaction);
+
+// Hard delete (permanent)
+await this.repository.forceDelete({ id }, transaction);
+
+// Restore
+await this.repository.restore({ id }, transaction);
+```
+
+### Pagination Pattern
+```typescript
+return this.repository.findAll({
+  where: whereConditions,
+  pagination: {
+    page: query.page || 1,
+    limit: query.limit || 10,
+    searchTerm: query.searchTerm || '',
+    searchFields: ['name', 'email'],
+    sortBy: 'createdAt',
+    sortOrder: 'DESC',
+  },
+});
+```
+
+### Transaction Pattern
+```typescript
+return this.transactionManager.execute(async (transaction) => {
+  const entity = await this.repository.create(data, transaction);
+  // Additional operations
+  return entity;
+});
+```
+
+### Permission Protection
+```typescript
+@RequirePermission(ResourceName.USERS, ActionName.CREATE)
+@Post()
+create(@Body() dto: CreateUserDto) {
+  return this.service.create(dto);
+}
+```
+
+### Queue Job Creation
+```typescript
+await this.queue.add('job-name', jobData, {
+  attempts: 3,
+  backoff: { type: 'exponential', delay: 2000 },
+});
+```
+
+### Validation Service Pattern
+```typescript
+@Injectable()
+export class ResourceValidator {
+  async validateAndSanitize(dto: CreateDto, options?: ValidationOptions) {
+    // Validation logic
+    // Uniqueness checks
+    // Sanitization
+    return sanitized;
+  }
+}
+```
+
+## Security Considerations
+- **JWT Authentication**: All routes protected by default (JwtAuthGuard)
+- **Public Routes**: Use `@Public()` decorator for public endpoints
+- **Permission Checks**: Always use permission decorators for sensitive operations
+- **Tenant Isolation**: Never bypass tenant filtering unless SUPERADMIN
+- **Input Validation**: Always validate and sanitize user input
+- **SQL Injection**: Use parameterized queries (Sequelize handles this)
+- **XSS Prevention**: Sanitize user input, especially in email templates
+
+## Performance Considerations
+- **Pagination**: Always paginate list endpoints (prevents O(n) memory usage)
+- **Indexes**: Add database indexes for frequently queried fields (O(n) → O(log n))
+- **Eager Loading**: Use `include` for related data when needed (prevents N+1 queries)
+- **Caching**: Consider caching for frequently accessed data (O(1) lookups)
+- **Queue Processing**: Use queues for long-running operations (non-blocking)
+- **Connection Pooling**: Database connection pooling configured
+- **Big O Awareness**: Always consider algorithm complexity when writing code
+- **Batch Operations**: Prefer bulk operations over loops (O(n) → O(1))
+- **Avoid Nested Loops**: Use Maps/Sets for lookups instead (O(n²) → O(n))
+- **Parallel Processing**: Use Promise.all() for independent operations
+- **Early Exit**: Break/return early in loops when possible
+
+## Best Practices
+
+### Core Principles
+1. **KISS (Keep It Simple)**: Prefer simple, readable solutions over complex ones
+2. **DRY (Don't Repeat Yourself)**: Reuse base classes, extract common logic, single source of truth
+3. **ACID Compliance**: Always use transactions for multi-step operations
+4. **Performance First**: Consider Big O notation, optimize hot paths, measure before optimizing
+
+### Implementation Practices
+5. **Always use transactions** for multi-step operations (ACID compliance)
+6. **Always validate input** with DTOs and class-validator
+7. **Always handle errors** appropriately (throw HTTP exceptions)
+8. **Always log important operations** using Logger
+9. **Always use repository methods** instead of direct model queries (for tenant filtering)
+10. **Always extend base classes** (BaseEntity, BaseRepository, BaseService) - DRY principle
+11. **Always use DTOs** for request/response validation
+12. **Always protect routes** with permission decorators
+13. **Always use user context** for audit fields and tenant filtering
+14. **Always follow naming conventions** and file organization
+15. **Always paginate** large datasets (performance optimization)
+16. **Always use indexes** on frequently queried fields (query optimization)
+17. **Always avoid N+1 queries** by using eager loading (performance)
+18. **Always consider algorithm complexity** when writing loops and queries (Big O awareness)
+19. **Always use batch operations** instead of loops when possible (efficiency)
+20. **Always keep code simple** - if it's hard to understand, simplify it (KISS principle)
+
+## Anti-Patterns to Avoid
+
+### Architecture & Security
+- ❌ Direct model queries bypassing repository (loses tenant filtering)
+- ❌ Bypassing tenant filtering without SUPERADMIN check
+- ❌ Not using transactions for multi-step operations (violates ACID)
+- ❌ Not validating input with DTOs
+- ❌ Not handling errors appropriately
+- ❌ Not using base classes (violates DRY)
+- ❌ Hard-coding organization IDs or user IDs
+- ❌ Not using permission decorators on protected routes
+- ❌ Not using user context for audit fields
+- ❌ Mixing business logic in controllers
+
+### Performance & Efficiency
+- ❌ Nested loops without optimization (O(n²) or worse)
+- ❌ Fetching all records without pagination (O(n) memory)
+- ❌ N+1 query problems (multiple database round trips)
+- ❌ Missing indexes on frequently queried fields
+- ❌ Synchronous processing of heavy operations
+- ❌ Loading entire files into memory instead of streaming
+- ❌ Not using caching for frequently accessed data
+- ❌ Sequential processing when parallel is possible
+- ❌ Over-engineering simple solutions (violates KISS)
+- ❌ Duplicating code instead of reusing base classes (violates DRY)
+
+## Module Dependencies
+- **CommonModule**: Global module providing shared services (UserContextService, TransactionManager, etc.)
+- **DatabaseModule**: Global module providing Sequelize connection
+- **BullModule**: Global module providing queue services (API server)
+- **WorkerBullModule**: Global module providing queue processors (Worker process)
+- **ConfigModule**: Global module providing configuration
+
+## Environment Variables
+- Database: `DB_HOST`, `DB_PORT`, `DB_USERNAME`, `DB_PASSWORD`, `DB_NAME`
+- Redis: `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD`, `REDIS_DB`
+- JWT: `JWT_SECRET`, `JWT_EXPIRES_IN`
+- Server: `PORT`, `NODE_ENV`, `ALLOWED_ORIGINS`
+
+## Migration & Seeding
+- **Migrations**: Use Sequelize CLI (`npm run db:migrate`)
+- **Seeders**: Use Sequelize seeders (`npm run db:seed`)
+- **Test DB**: Separate commands for test database setup
+

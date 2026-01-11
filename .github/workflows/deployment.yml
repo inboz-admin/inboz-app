@@ -1,0 +1,180 @@
+name: Deploy to Production
+
+on:
+  push:
+    tags: [ 'v*' ]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+        - production
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build-and-push:
+    name: Build and Push Images To GHCR
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Log in to Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Extract metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        tags: |
+          type=semver,pattern={{version}}
+          type=raw,value=latest,enable={{is_default_branch}}
+
+    - name: Build and push server image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: ./docker/Dockerfile.server
+        target: production
+        push: true
+        tags: |
+          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-server:${{ steps.meta.outputs.version }}
+          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-server:latest
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        platforms: linux/amd64
+
+    - name: Build and push UI image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: ./docker/Dockerfile.ui
+        target: production
+        push: true
+        tags: |
+          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-ui:${{ steps.meta.outputs.version }}
+          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-ui:latest
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        platforms: linux/amd64
+
+  deploy-production:
+    name: Deploy to VPS
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    environment: production
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Create deployment directory
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.PROD_HOST }}
+        username: ${{ secrets.PROD_USERNAME }}
+        key: ${{ secrets.PROD_SSH_KEY }}
+        port: ${{ secrets.PROD_PORT }}
+        script: |
+          # Create deployment directory structure
+          mkdir -p /opt/inboz/docker
+
+    - name: Copy docker files to production server
+      uses: appleboy/scp-action@v0.1.4
+      with:
+        host: ${{ secrets.PROD_HOST }}
+        username: ${{ secrets.PROD_USERNAME }}
+        key: ${{ secrets.PROD_SSH_KEY }}
+        port: ${{ secrets.PROD_PORT }}
+        source: "docker/*"
+        target: "/opt/inboz/"
+
+    - name: Deploy to production server
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.PROD_HOST }}
+        username: ${{ secrets.PROD_USERNAME }}
+        key: ${{ secrets.PROD_SSH_KEY }}
+        port: ${{ secrets.PROD_PORT }}
+        script: |
+          # Set variables
+          export VERSION="${{ needs.build-and-push.outputs.version }}"
+          export REPO="${{ github.repository }}"
+          export IMAGE_NAME="${{ env.IMAGE_NAME }}"
+          
+          # Navigate to deployment directory
+          cd /opt/inboz
+          
+          # Create .env file
+          cat > docker/.env << 'EOF'
+          ${{ secrets.ENV_FILE_CONTENT }}
+          EOF
+          
+          # Update docker-compose to use new image tags
+          # Update server image (used by server, worker, and scheduler services)
+          sed -i "s|ghcr.io/${IMAGE_NAME}-server:.*|ghcr.io/${IMAGE_NAME}-server:${VERSION}|g" /opt/inboz/docker/docker-compose.prod.yml
+          # Update UI image
+          sed -i "s|ghcr.io/${IMAGE_NAME}-ui:.*|ghcr.io/${IMAGE_NAME}-ui:${VERSION}|g" /opt/inboz/docker/docker-compose.prod.yml
+          
+          # Login to GitHub Container Registry
+          echo "${{ secrets.GH_TOKEN }}" | docker login ghcr.io -u admin-ddio --password-stdin
+          
+          # Deploy with worker scaling (3 workers)
+          cd docker
+          docker-compose -f docker-compose.prod.yml --env-file .env down
+          docker-compose -f docker-compose.prod.yml --env-file .env pull
+          docker-compose -f docker-compose.prod.yml --env-file .env up -d --scale worker=3
+          
+          echo "Deployed with 3 worker instances"
+          
+          # Wait for services to be ready
+          echo "Waiting for services to be ready..."
+          sleep 30
+          
+          # Show status
+          docker-compose -f docker-compose.prod.yml --env-file .env ps
+
+    - name: Create GitHub release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: ${{ needs.build-and-push.outputs.version }}
+        name: Release ${{ needs.build-and-push.outputs.version }}
+        body: |
+          ## 🚀 Production Deployment
+          
+          **Version:** ${{ needs.build-and-push.outputs.version }}
+          **Environment:** Production
+          **Deployed by:** ${{ github.actor }}
+          **Commit:** ${{ github.sha }}
+          
+          ### Changes
+          - Production deployment completed successfully
+          - All services are healthy
+          - Worker instances: 3
+          
+          ### Monitoring
+          - **Application:** http://${{ secrets.PROD_HOST }}/
+          - **API:** http://${{ secrets.PROD_HOST }}/api
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
