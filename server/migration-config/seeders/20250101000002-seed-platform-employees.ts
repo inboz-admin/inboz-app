@@ -1,8 +1,7 @@
 import { QueryInterface } from 'sequelize';
 import * as crypto from 'crypto';
 
-// Load environment variables (dotenv is already loaded in database.js, but load here for safety)
-require('dotenv').config();
+// Environment variables are already loaded in database.js
 
 export default {
   up: async (queryInterface: QueryInterface) => {
