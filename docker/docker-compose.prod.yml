@@ -50,7 +50,7 @@ services:
 
   # NestJS Backend Server (API)
   server:
-    image: ghcr.io/admin-ddio/email-campaign-tool-server:latest
+    image: ghcr.io/inboz-admin/email-campaign-tool-server:latest
     container_name: inboz-server-prod
     restart: unless-stopped
     ports:
@@ -114,7 +114,7 @@ services:
   # BullMQ Worker (processes background jobs)
   # Note: container_name removed to allow scaling with --scale worker=3
   worker:
-    image: ghcr.io/admin-ddio/email-campaign-tool-server:latest
+    image: ghcr.io/inboz-admin/email-campaign-tool-server:latest
     restart: unless-stopped
     command: ["sh", "-c", "sleep 30 && npm run start:worker:prod"]
     # Simple health check: verify Node.js worker process is running
@@ -186,7 +186,7 @@ services:
 
   # Scheduler (cron jobs - only ONE instance should run)
   scheduler:
-    image: ghcr.io/admin-ddio/email-campaign-tool-server:latest
+    image: ghcr.io/inboz-admin/email-campaign-tool-server:latest
     container_name: inboz-scheduler-prod
     restart: unless-stopped
     command: ["sh", "-c", "sleep 30 && npm run start:scheduler:prod"]
@@ -259,7 +259,7 @@ services:
 
   # React Frontend UI
   ui:
-    image: ghcr.io/admin-ddio/email-campaign-tool-ui:latest
+    image: ghcr.io/inboz-admin/email-campaign-tool-ui:latest
     container_name: inboz-ui-prod
     restart: unless-stopped
     ports:
