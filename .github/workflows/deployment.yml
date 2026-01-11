@@ -136,7 +136,7 @@ jobs:
           sed -i "s|ghcr.io/${IMAGE_NAME}-ui:.*|ghcr.io/${IMAGE_NAME}-ui:${VERSION}|g" /opt/inboz/docker/docker-compose.prod.yml
           
           # Login to GitHub Container Registry
-          echo "${{ secrets.GH_TOKEN }}" | docker login ghcr.io -u admin-ddio --password-stdin
+          echo "${{ secrets.GH_TOKEN }}" | docker login ghcr.io -u inboz-admin --password-stdin
           
           # Deploy with worker scaling (3 workers)
           cd docker
