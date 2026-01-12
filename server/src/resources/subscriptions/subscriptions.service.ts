@@ -24,6 +24,8 @@ import { DateNormalizationService } from './services/date-normalization.service'
 import { PeriodCalculationService } from './services/period-calculation.service';
 import { TransactionManager } from 'src/common/services/transaction-manager.service';
 import { QuotaManagementService } from 'src/common/services/quota-management.service';
+import { AdminUpgradeSubscriptionDto, AdminUpdateUserCountDto } from './dto/admin-upgrade.dto';
+import { Currency } from './entities/subscription.entity';
 
 @Injectable()
 export class SubscriptionsService extends BaseService<Subscription> {
@@ -714,6 +716,212 @@ export class SubscriptionsService extends BaseService<Subscription> {
     if (subscription.cancelAt && new Date(subscription.cancelAt) <= new Date()) {
       throw new BadRequestException('Subscription cancellation is already scheduled');
     }
+  }
+
+  /**
+   * Admin upgrade subscription - bypasses payment, creates subscription with zero invoice
+   * Cancels old subscription and creates new one with selected plan and user count for 1 month period
+   */
+  async adminUpgradeSubscription(
+    dto: AdminUpgradeSubscriptionDto,
+  ): Promise<Subscription> {
+    return this.transactionManager.execute(async (transaction) => {
+      // Validate organization exists
+      const organization = await this.organizationModel.findByPk(
+        dto.organizationId,
+        { transaction },
+      );
+      if (!organization) {
+        throw new NotFoundException(
+          `Organization with ID ${dto.organizationId} not found`,
+        );
+      }
+
+      // Validate plan exists
+      const plan = await this.subscriptionPlanModel.findByPk(dto.planId, {
+        transaction,
+      });
+      if (!plan) {
+        throw new NotFoundException(`Subscription plan with ID ${dto.planId} not found`);
+      }
+
+      if (!plan.isActive) {
+        throw new BadRequestException('Selected plan is not active');
+      }
+
+      // Validate user count
+      if (dto.userCount < 1) {
+        throw new BadRequestException('User count must be at least 1');
+      }
+
+      // Use provided billing cycle or default to MONTHLY
+      const billingCycle = dto.billingCycle || BillingCycle.MONTHLY;
+
+      // Check if subscription exists and cancel it
+      const existingSubscription = await this.findActiveSubscriptionByOrganizationId(
+        dto.organizationId,
+      );
+
+      if (existingSubscription) {
+        // Cancel the old subscription
+        const cancelAt = moment().toDate();
+        await this.updateSubscription(
+          existingSubscription.id,
+          {
+            status: SubscriptionStatus.CANCELLED,
+            cancelAt: cancelAt.toISOString(),
+            cancelledAt: cancelAt.toISOString(),
+            cancelReason: `Cancelled due to admin upgrade to ${plan.name}`,
+          },
+          transaction,
+        );
+
+        this.logger.log(
+          `Admin cancelled old subscription ${existingSubscription.id} for organization ${dto.organizationId}`,
+        );
+      }
+
+      const now = moment();
+      const periodStart = now.toDate();
+      const periodEnd = moment(now).add(1, 'month').toDate();
+
+      // Calculate pricing (for display purposes, but we'll set amount to 0)
+      const pricingResult = await this.pricingCalculationService.calculateSubscriptionPrice(
+        dto.planId,
+        dto.userCount,
+        billingCycle,
+      );
+
+      // Create new subscription
+      const subscription = await this.createSubscription(
+        {
+          organizationId: dto.organizationId,
+          planId: dto.planId,
+          status: SubscriptionStatus.ACTIVE,
+          billingCycle,
+          amount: 0, // Free upgrade
+          currency: Currency.USD,
+          currentPeriodStart: periodStart.toISOString(),
+          currentPeriodEnd: periodEnd.toISOString(),
+          userCount: dto.userCount,
+          volumeDiscountPercent: pricingResult.volumeDiscountPercent,
+          finalAmount: 0, // Free upgrade
+        },
+        transaction,
+      );
+
+      this.logger.log(
+        `Admin created new subscription ${subscription.id} for organization ${dto.organizationId}: Plan ${plan.name}, ${dto.userCount} users, ${billingCycle}`,
+      );
+
+      // Generate zero-amount invoice
+      await this.invoiceGenerationService.generateAdminUpgradeInvoice(
+        dto.organizationId,
+        subscription.id,
+        `Admin upgrade: ${plan.name} - ${dto.userCount} user${dto.userCount !== 1 ? 's' : ''}`,
+        transaction,
+      );
+
+      // Clear quota cache
+      await this.quotaManagementService.clearCache(undefined, dto.organizationId);
+      this.logger.debug(
+        `Cleared quota cache for organization ${dto.organizationId} after admin upgrade`,
+      );
+
+      return subscription;
+    });
+  }
+
+  /**
+   * Admin update user count - bypasses payment, updates subscription with zero invoice
+   */
+  async adminUpdateUserCount(dto: AdminUpdateUserCountDto): Promise<Subscription> {
+    return this.transactionManager.execute(async (transaction) => {
+      // Validate organization exists
+      const organization = await this.organizationModel.findByPk(
+        dto.organizationId,
+        { transaction },
+      );
+      if (!organization) {
+        throw new NotFoundException(
+          `Organization with ID ${dto.organizationId} not found`,
+        );
+      }
+
+      // Validate user count
+      if (dto.userCount < 1) {
+        throw new BadRequestException('User count must be at least 1');
+      }
+
+      // Get existing subscription
+      const subscription = await this.findActiveSubscriptionByOrganizationId(
+        dto.organizationId,
+      );
+
+      if (!subscription) {
+        throw new NotFoundException(
+          `No active subscription found for organization ${dto.organizationId}`,
+        );
+      }
+
+      // Get plan
+      const plan = await this.subscriptionPlanModel.findByPk(subscription.planId, {
+        transaction,
+      });
+      if (!plan) {
+        throw new NotFoundException(`Subscription plan not found`);
+      }
+
+      const currentUserCount = subscription.userCount || 1;
+
+      if (dto.userCount === currentUserCount) {
+        throw new BadRequestException(
+          `User count is already ${dto.userCount}. No changes needed.`,
+        );
+      }
+
+      // Calculate pricing with new user count
+      const pricingResult = await this.pricingCalculationService.calculateSubscriptionPrice(
+        subscription.planId,
+        dto.userCount,
+        subscription.billingCycle,
+      );
+
+      // Update subscription
+      const updatedSubscription = await this.updateSubscription(
+        subscription.id,
+        {
+          userCount: dto.userCount,
+          volumeDiscountPercent: pricingResult.volumeDiscountPercent,
+          amount: 0, // Free update
+          finalAmount: 0, // Free update
+          // Clear any pending user count changes
+          pendingUserCount: null,
+          pendingChangeReason: null,
+        },
+        transaction,
+      );
+
+      this.logger.log(
+        `Admin updated user count for subscription ${subscription.id}: ${currentUserCount} → ${dto.userCount} users`,
+      );
+
+      // Generate zero-amount invoice
+      await this.invoiceGenerationService.generateAdminUpgradeInvoice(
+        dto.organizationId,
+        subscription.id,
+        `Admin user count update: ${currentUserCount} → ${dto.userCount} users`,
+        transaction,
+      );
+
+      // Clear quota cache
+      await this.quotaManagementService.clearCache(undefined, dto.organizationId);
+      this.logger.debug(
+        `Cleared quota cache for organization ${dto.organizationId} after admin user count update`,
+      );
+
+      return updatedSubscription;
+    });
   }
 }
 

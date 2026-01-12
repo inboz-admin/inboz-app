@@ -30,6 +30,9 @@ import { InvoiceStatus } from './entities/invoice.entity';
 import { VerifyPaymentDto } from 'src/resources/payments/dto/verify-payment.dto';
 import { PaymentProvider } from 'src/common/enums/payment-provider.enum';
 import { StripeService } from 'src/resources/payments/stripe.service';
+import { AdminUpgradeSubscriptionDto, AdminUpdateUserCountDto } from './dto/admin-upgrade.dto';
+import { UserContextService } from 'src/common/services/user-context.service';
+import { ForbiddenException } from '@nestjs/common';
 
 @Controller()
 export class SubscriptionsController {
@@ -42,6 +45,7 @@ export class SubscriptionsController {
     private readonly prorationCalculationService: ProrationCalculationService,
     private readonly trialManagementService: TrialManagementService,
     private readonly stripeService: StripeService,
+    private readonly userContextService: UserContextService,
   ) {}
 
   // ===== SUBSCRIPTION PLANS ROUTES (/subscriptions/plans/*) =====
@@ -622,5 +626,32 @@ export class SubscriptionsController {
   @Delete('invoices/:id')
   removeInvoice(@Param('id') id: string) {
     return this.invoicesService.removeInvoice(id);
+  }
+
+  // ===== ADMIN SUBSCRIPTION MANAGEMENT ROUTES (SUPERADMIN ONLY) =====
+  @Post('admin/upgrade')
+  async adminUpgradeSubscription(@Body() dto: AdminUpgradeSubscriptionDto) {
+    // Check if user is SUPERADMIN
+    const currentUser = this.userContextService.getCurrentUser();
+    const isSuperAdmin = currentUser?.type === 'employee' && currentUser?.role === 'SUPERADMIN';
+
+    if (!isSuperAdmin) {
+      throw new ForbiddenException('Only SUPERADMIN employees can perform admin subscription upgrades');
+    }
+
+    return this.subscriptionsService.adminUpgradeSubscription(dto);
+  }
+
+  @Patch('admin/user-count')
+  async adminUpdateUserCount(@Body() dto: AdminUpdateUserCountDto) {
+    // Check if user is SUPERADMIN
+    const currentUser = this.userContextService.getCurrentUser();
+    const isSuperAdmin = currentUser?.type === 'employee' && currentUser?.role === 'SUPERADMIN';
+
+    if (!isSuperAdmin) {
+      throw new ForbiddenException('Only SUPERADMIN employees can perform admin user count updates');
+    }
+
+    return this.subscriptionsService.adminUpdateUserCount(dto);
   }
 }

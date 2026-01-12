@@ -35,6 +35,7 @@ import { roleService } from "@/api/roleService";
 import { ActionType, ModuleName } from "@/api/roleTypes";
 import { toast } from "sonner";
 import OrganizationModal from "./OrganizationModal";
+import AdminSubscriptionModal from "./AdminSubscriptionModal";
 import { useAppStore } from "@/stores/appStore";
 import { createOrganizationColumns } from "./columns";
 import {
@@ -59,6 +60,9 @@ export function OrganizationsPage() {
   const [selectedOrganization, setSelectedOrganization] =
     useState<Organization | null>(null);
   const [isViewMode, setIsViewMode] = useState(false);
+  const [isSubscriptionModalOpen, setIsSubscriptionModalOpen] = useState(false);
+  const [organizationForSubscription, setOrganizationForSubscription] =
+    useState<Organization | null>(null);
   // Commented out delete organization functionality
   // const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   // const [organizationToDelete, setOrganizationToDelete] =
@@ -278,6 +282,23 @@ export function OrganizationsPage() {
     refreshOrganizations();
   };
 
+  // Handle opening subscription management modal
+  const handleManageSubscription = (organization: Organization) => {
+    setOrganizationForSubscription(organization);
+    setIsSubscriptionModalOpen(true);
+  };
+
+  // Handle closing subscription modal
+  const handleCloseSubscriptionModal = () => {
+    setIsSubscriptionModalOpen(false);
+    setOrganizationForSubscription(null);
+  };
+
+  // Handle subscription modal success
+  const handleSubscriptionModalSuccess = () => {
+    refreshOrganizations();
+  };
+
   // Commented out delete organization functionality
   // // Handle delete confirmation
   // const handleDeleteClick = (organization: Organization) => {
@@ -367,6 +388,9 @@ export function OrganizationsPage() {
 
   // Server-side filtering is handled by the API, no need for client-side filtering
 
+  // Check if user is SUPERADMIN
+  const isSuperAdmin = user?.type === 'employee' && user?.role === 'SUPERADMIN';
+
   // Table columns definition
   const columns = useMemo(
     () =>
@@ -375,8 +399,10 @@ export function OrganizationsPage() {
         onViewOrganization: handleViewOrganization,
         onEditOrganization: handleEditOrganization,
         onDeleteOrganization: () => {}, // Disabled delete functionality
+        onManageSubscription: isSuperAdmin ? handleManageSubscription : undefined,
+        isSuperAdmin,
       }),
-    [canPerformAction]
+    [canPerformAction, isSuperAdmin]
   );
 
   // Table instance
@@ -547,6 +573,16 @@ export function OrganizationsPage() {
         isReadOnly={isViewMode}
         userOrganizationId={user?.organizationId}
       />
+
+      {/* Admin Subscription Modal */}
+      {organizationForSubscription && (
+        <AdminSubscriptionModal
+          open={isSubscriptionModalOpen}
+          onOpenChange={handleCloseSubscriptionModal}
+          organization={organizationForSubscription}
+          onSuccess={handleSubscriptionModalSuccess}
+        />
+      )}
 
       {/* Delete Confirmation Dialog */}
       {/* Commented out delete organization dialog */}

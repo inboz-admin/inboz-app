@@ -78,6 +78,60 @@ export class InvoiceGenerationService {
   }
 
   /**
+   * Generate a $0 invoice for admin subscription upgrades/changes
+   */
+  async generateAdminUpgradeInvoice(
+    organizationId: string,
+    subscriptionId: string,
+    description: string,
+    transaction?: Transaction,
+  ): Promise<Invoice> {
+    try {
+      const subscription = await this.subscriptionModel.findByPk(subscriptionId, {
+        include: [{ model: SubscriptionPlan, as: 'plan' }],
+        transaction,
+      });
+
+      if (!subscription) {
+        throw new NotFoundException(`Subscription with ID ${subscriptionId} not found`);
+      }
+
+      const invoiceNumber = await this.invoicesService.generateInvoiceNumber(transaction);
+      const now = moment();
+      const issueDate = moment(now);
+      const dueDate = moment(subscription.currentPeriodEnd || now.add(1, 'month'));
+
+      const invoice = await this.invoicesService.createInvoice({
+        organizationId,
+        subscriptionId,
+        invoiceNumber,
+        status: InvoiceStatus.PAID, // $0 invoice is automatically paid
+        subtotal: 0,
+        taxAmount: 0,
+        total: 0,
+        amountPaid: 0,
+        amountDue: 0,
+        currency: Currency.USD,
+        issueDate: issueDate.format('YYYY-MM-DD'),
+        dueDate: dueDate.format('YYYY-MM-DD'),
+        paidAt: now.toISOString(), // Mark as paid immediately for $0 invoice
+      }, transaction);
+
+      this.logger.log(
+        `Generated admin upgrade invoice ${invoiceNumber} ($0) for organization ${organizationId}: ${description}`,
+      );
+
+      return invoice;
+    } catch (error) {
+      this.logger.error(
+        `Failed to generate admin upgrade invoice for organization ${organizationId}:`,
+        error,
+      );
+      throw error;
+    }
+  }
+
+  /**
    * Generate invoice for subscription (monthly or yearly)
    */
   async generateSubscriptionInvoice(

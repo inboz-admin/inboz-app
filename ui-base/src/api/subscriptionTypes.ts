@@ -132,6 +132,18 @@ export interface GetSubscriptionsResponse {
   };
 }
 
+export interface AdminUpgradeSubscriptionRequest {
+  organizationId: string;
+  planId: string;
+  userCount: number;
+  billingCycle?: BillingCycle;
+}
+
+export interface AdminUpdateUserCountRequest {
+  organizationId: string;
+  userCount: number;
+}
+
 // Display labels for UI
 export const SubscriptionStatusLabels: Record<SubscriptionStatus, string> = {
   [SubscriptionStatus.ACTIVE]: "Active",

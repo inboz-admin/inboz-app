@@ -208,6 +208,30 @@ class SubscriptionService {
   }): Promise<BaseResponse<{ url: string }>> {
     return apiService.post(`${this.baseUrl}/stripe/customer-portal`, data);
   }
+
+  /**
+   * Admin upgrade subscription (SUPERADMIN only)
+   * Upgrades organization subscription with selected plan and user count, creates zero-amount invoice
+   */
+  async adminUpgradeSubscription(data: {
+    organizationId: string;
+    planId: string;
+    userCount: number;
+    billingCycle?: "MONTHLY" | "YEARLY";
+  }): Promise<BaseResponse<Subscription>> {
+    return apiService.post(`${this.baseUrl}/admin/upgrade`, data);
+  }
+
+  /**
+   * Admin update user count (SUPERADMIN only)
+   * Updates organization subscription user count, creates zero-amount invoice
+   */
+  async adminUpdateUserCount(data: {
+    organizationId: string;
+    userCount: number;
+  }): Promise<BaseResponse<Subscription>> {
+    return apiService.patch(`${this.baseUrl}/admin/user-count`, data);
+  }
 }
 
 const subscriptionService = new SubscriptionService();

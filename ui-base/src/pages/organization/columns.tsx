@@ -8,6 +8,7 @@ import {
   Edit,
   Trash2,
   Copy,
+  CreditCard,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -65,6 +66,8 @@ interface OrganizationColumnsProps {
   onViewOrganization: (organization: Organization) => void;
   onEditOrganization: (organization: Organization) => void;
   onDeleteOrganization: (organization: Organization) => void;
+  onManageSubscription?: (organization: Organization) => void;
+  isSuperAdmin?: boolean;
 }
 
 export const createOrganizationColumns = ({
@@ -72,6 +75,8 @@ export const createOrganizationColumns = ({
   onViewOrganization,
   onEditOrganization,
   onDeleteOrganization,
+  onManageSubscription,
+  isSuperAdmin = false,
 }: OrganizationColumnsProps): ColumnDef<Organization>[] => [
   {
     id: "select",
@@ -260,6 +265,18 @@ export const createOrganizationColumns = ({
                   <Edit className="mr-2 h-4 w-4" />
                   Edit organization
                 </DropdownMenuItem>
+              )}
+              {isSuperAdmin && onManageSubscription && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={() => onManageSubscription(organization)}
+                    className="cursor-pointer"
+                  >
+                    <CreditCard className="mr-2 h-4 w-4" />
+                    Manage Subscription
+                  </DropdownMenuItem>
+                </>
               )}
               {/* Commented out delete organization option */}
               {/* {canPerformAction(ActionType.DELETE) && (
