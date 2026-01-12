@@ -55,7 +55,7 @@ export class OrganizationsService {
   }
 
   async createOrganization(createDto: CreateOrganizationDto): Promise<Organization> {
-    return this.transactionManager.execute(async (transaction) => {
+    const organization = await this.transactionManager.execute(async (transaction) => {
       // Auto-generate slug if not provided
       if (!createDto.slug) {
         createDto.slug = await generateUniqueOrgSlug(transaction);
@@ -65,13 +65,23 @@ export class OrganizationsService {
         transaction,
       });
 
-      const organization = await this.organizationRepository.create(validatedDto, transaction);
+      const org = await this.organizationRepository.create(validatedDto, transaction);
 
-      await this.subscriptionQueue.createDefaultSubscription(organization.id);
-
-      this.logger.log(`Created organization: ${organization.id} and queued subscription creation`);
-      return organization;
+      this.logger.log(`Created organization: ${org.id}`);
+      return org;
     });
+
+    // Queue subscription creation outside transaction (non-blocking, fire-and-forget)
+    // This prevents the subscription queue addition from blocking the HTTP response
+    this.subscriptionQueue.createDefaultSubscription(organization.id).catch((error) => {
+      this.logger.error(
+        `Failed to queue subscription creation for organization ${organization.id}:`,
+        error,
+      );
+      // Don't throw - organization is already created, subscription can be created later
+    });
+
+    return organization;
   }
 
   async findAll(query?: OrganizationQueryDto) {

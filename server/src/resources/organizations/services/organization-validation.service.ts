@@ -83,35 +83,56 @@ export class OrganizationValidator {
   }
 
   /**
-   * Validates uniqueness of slug if provided
+   * Validates uniqueness of name and slug if provided
    * Domain and billingEmail are no longer checked for uniqueness (domain is metadata, billingEmail can be shared)
    */
   private async validateUniqueness(
     dto: CreateOrganizationDto | UpdateOrganizationDto,
     options: { excludeId?: string; transaction?: Transaction }
   ): Promise<void> {
-    // Only check slug uniqueness if provided and not empty
-    if (!dto.slug || !dto.slug.trim()) {
-      return;
+    // Check name uniqueness (required field)
+    // Note: Name is sanitized to Title Case before this check, so case-sensitive comparison is sufficient
+    if (dto.name && dto.name.trim()) {
+      const nameWhere: any = {
+        name: dto.name.trim(),
+      };
+
+      if (options.excludeId) {
+        nameWhere.id = { [Op.ne]: options.excludeId };
+      }
+
+      const existingByName = await this.organizationRepository.findOne({
+        where: nameWhere,
+        transaction: options.transaction,
+      });
+
+      if (existingByName) {
+        throw new ConflictException(
+          `Organization with name '${dto.name.trim()}' already exists`,
+        );
+      }
     }
 
-    const where: any = {
-      slug: dto.slug,
-    };
+    // Check slug uniqueness if provided
+    if (dto.slug && dto.slug.trim()) {
+      const slugWhere: any = {
+        slug: dto.slug,
+      };
 
-    if (options.excludeId) {
-      where.id = { [Op.ne]: options.excludeId };
-    }
+      if (options.excludeId) {
+        slugWhere.id = { [Op.ne]: options.excludeId };
+      }
 
-    const existing = await this.organizationRepository.findOne({
-      where,
-      transaction: options.transaction,
-    });
+      const existingBySlug = await this.organizationRepository.findOne({
+        where: slugWhere,
+        transaction: options.transaction,
+      });
 
-    if (existing) {
-      throw new ConflictException(
-        `Organization with slug '${dto.slug}' already exists`,
-      );
+      if (existingBySlug) {
+        throw new ConflictException(
+          `Organization with slug '${dto.slug}' already exists`,
+        );
+      }
     }
   }
 }

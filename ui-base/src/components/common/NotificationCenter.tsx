@@ -8,11 +8,13 @@ import { formatDistanceToNow } from 'date-fns';
 import { toast } from 'sonner';
 import { NotificationType } from '@/api/notificationTypes';
 import { pushNotificationService } from '@/services/pushNotificationService';
+import { useAppStore } from '@/stores/appStore';
 
 export function NotificationCenter() {
   const [open, setOpen] = useState(false);
   const [pushEnabled, setPushEnabled] = useState(false);
   const [pushSupported, setPushSupported] = useState(false);
+  const setPushNotificationPromptDismissed = useAppStore((state) => state.setPushNotificationPromptDismissed);
   const {
     notifications,
     unreadCount,
@@ -109,6 +111,8 @@ export function NotificationCenter() {
         const isSubscribed = await pushNotificationService.isSubscribed();
         setPushEnabled(isSubscribed);
         if (isSubscribed) {
+          // Clear dismissal flag so prompt can show again if user unsubscribes later
+          setPushNotificationPromptDismissed(false);
           toast.success('Push notifications enabled!');
         }
       }

@@ -49,26 +49,25 @@ export class SubscriptionQueue
       },
     );
 
-    // Log job creation in audit log (job scheduling, not consumption)
-    try {
-      await this.auditLogsService.createAuditLog({
+    // Log job creation in audit log (non-blocking, fire-and-forget)
+    // This prevents audit log creation from delaying the response
+    this.auditLogsService.createAuditLog({
+      organizationId: organizationId,
+      performedByUserId: undefined, // System-generated, no user
+      module: 'SUBSCRIPTIONS',
+      action: AuditAction.SYSTEM,
+      recordId: organizationId,
+      description: `Subscription creation job scheduled for organization`,
+      details: {
+        jobId: job.id,
+        jobType: JobType.CREATE_DEFAULT_SUBSCRIPTION,
+        queueName: QueueName.SUBSCRIPTION,
         organizationId: organizationId,
-        performedByUserId: undefined, // System-generated, no user
-        module: 'SUBSCRIPTIONS',
-        action: AuditAction.SYSTEM,
-        recordId: organizationId,
-        description: `Subscription creation job scheduled for organization`,
-        details: {
-          jobId: job.id,
-          jobType: JobType.CREATE_DEFAULT_SUBSCRIPTION,
-          queueName: QueueName.SUBSCRIPTION,
-          organizationId: organizationId,
-          triggeredBy: 'auto_signup',
-        },
-      });
-    } catch (error) {
+        triggeredBy: 'auto_signup',
+      },
+    }).catch((error) => {
       this.logger.warn('Failed to log subscription job creation:', error);
-    }
+    });
   }
 }
 

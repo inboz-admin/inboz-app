@@ -322,12 +322,28 @@ export default function OrganizationModal({
         );
       }
     } catch (error: any) {
-      const errorMessage =
-        error?.response?.data?.message ||
-        error?.data?.message ||
-        error?.message ||
-        "An error occurred while saving the organization";
-      toast.error(errorMessage);
+      // Check if error is a timeout
+      const isTimeout = error?.name === 'TimeoutError' || 
+        error?.message?.includes('timeout') || 
+        error?.message?.includes('aborted') ||
+        error?.message?.includes('signal');
+      
+      if (isTimeout && !organization) {
+        // For timeout during creation, suggest checking if it was created
+        toast.warning(
+          "Request timed out. The organization may have been created. Please refresh the page to verify.",
+          { duration: 5000 }
+        );
+        // Still call onSuccess to refresh the list in case it was created
+        onSuccess();
+      } else {
+        const errorMessage =
+          error?.response?.data?.message ||
+          error?.data?.message ||
+          error?.message ||
+          "An error occurred while saving the organization";
+        toast.error(errorMessage);
+      }
       console.error("Organization save error:", error);
     } finally {
       setLoading(false);

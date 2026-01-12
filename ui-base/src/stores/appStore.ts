@@ -20,6 +20,8 @@ interface AppState {
   // UI state
   sidebarOpen: boolean;
   setSidebarOpen: (open: boolean) => void;
+  pushNotificationPromptDismissed: boolean;
+  setPushNotificationPromptDismissed: (dismissed: boolean) => void;
 
   // Loading states
   isLoading: boolean;
@@ -50,6 +52,7 @@ const initialState = {
   selectedOrganizationId: null,
   platformView: false,
   sidebarOpen: false,
+  pushNotificationPromptDismissed: false,
   isLoading: false,
   notifications: [],
 };
@@ -66,6 +69,8 @@ export const useAppStore = create<AppState>()(
       setPlatformView: (platformView) => set({ platformView }),
 
       setSidebarOpen: (sidebarOpen) => set({ sidebarOpen }),
+      setPushNotificationPromptDismissed: (pushNotificationPromptDismissed) => 
+        set({ pushNotificationPromptDismissed }),
 
       setIsLoading: (isLoading) => set({ isLoading }),
 
@@ -118,6 +123,7 @@ export const useAppStore = create<AppState>()(
         user: state.user,
         selectedOrganizationId: state.selectedOrganizationId,
         platformView: state.platformView,
+        pushNotificationPromptDismissed: state.pushNotificationPromptDismissed,
       }),
     }
   )

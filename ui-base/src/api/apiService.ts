@@ -138,7 +138,8 @@ export class ApiService {
     method: string,
     url: string,
     data?: unknown,
-    customHeaders?: Record<string, string>
+    customHeaders?: Record<string, string>,
+    customTimeout?: number
   ): Promise<BaseResponse<T>> {
     try {
       const fullUrl = url.startsWith("http")
@@ -151,6 +152,8 @@ export class ApiService {
         this.defaultHeaders["Authorization"] = `Bearer ${storedToken}`;
       }
 
+      const timeout = customTimeout ?? this.timeout;
+
       const requestOptions: RequestInit = {
         method: method.toUpperCase(),
         headers: {
@@ -158,7 +161,7 @@ export class ApiService {
           ...customHeaders,
         },
         credentials: "include", // Include cookies for OAuth authentication
-        signal: AbortSignal.timeout(this.timeout),
+        signal: AbortSignal.timeout(timeout),
       };
 
       // Add body for POST, PUT, PATCH, DELETE requests
@@ -193,10 +196,22 @@ export class ApiService {
 
       return responseData;
     } catch (error: unknown) {
-      // Show network error toast
-      const errorMessage =
-        error instanceof Error ? error.message : "Network error occurred";
-      toast.error(errorMessage);
+      // Check if error is a timeout
+      const isTimeout = error instanceof Error && 
+        (error.name === 'TimeoutError' || 
+         error.message.includes('timeout') || 
+         error.message.includes('aborted'));
+      
+      // Show network error toast with specific message for timeouts
+      const errorMessage = isTimeout
+        ? "Request timed out. The operation may have completed in the background. Please refresh to verify."
+        : (error instanceof Error ? error.message : "Network error occurred");
+      
+      // Don't show toast for timeout errors - let the component handle it
+      // as the operation might have succeeded
+      if (!isTimeout) {
+        toast.error(errorMessage);
+      }
 
       // Create a basic error response if the request fails
       return {
@@ -257,7 +272,7 @@ export class ApiService {
       const separator = url.includes('?') ? '&' : '?';
       finalUrl = `${url}${separator}${searchParams}`;
     }
-    return this.request<T>("GET", finalUrl, undefined, headers);
+    return this.request<T>("GET", finalUrl, undefined, headers, undefined);
   }
 
   /**
@@ -268,7 +283,12 @@ export class ApiService {
     data?: unknown,
     headers?: Record<string, string>
   ): Promise<BaseResponse<T>> {
-    return this.request<T>("POST", url, data, headers);
+    // Increase timeout for organization creation (can take longer due to subscription queue)
+    const customTimeout = url.includes('/organizations') && !url.match(/\/organizations\/[^/]+/) 
+      ? 30000 // 30 seconds for organization creation
+      : this.timeout;
+    
+    return this.request<T>("POST", url, data, headers, customTimeout);
   }
 
   /**
@@ -279,7 +299,7 @@ export class ApiService {
     data?: unknown,
     headers?: Record<string, string>
   ): Promise<BaseResponse<T>> {
-    return this.request<T>("PUT", url, data, headers);
+    return this.request<T>("PUT", url, data, headers, undefined);
   }
 
   /**
@@ -290,7 +310,7 @@ export class ApiService {
     data?: unknown,
     headers?: Record<string, string>
   ): Promise<BaseResponse<T>> {
-    return this.request<T>("PATCH", url, data, headers);
+    return this.request<T>("PATCH", url, data, headers, undefined);
   }
 
   /**
@@ -301,7 +321,7 @@ export class ApiService {
     data?: unknown,
     headers?: Record<string, string>
   ): Promise<BaseResponse<T>> {
-    return this.request<T>("DELETE", url, data, headers);
+    return this.request<T>("DELETE", url, data, headers, undefined);
   }
 }
 

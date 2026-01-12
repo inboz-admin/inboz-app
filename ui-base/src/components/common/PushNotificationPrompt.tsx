@@ -3,12 +3,15 @@ import { Bell, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { pushNotificationService } from '@/services/pushNotificationService';
 import { toast } from 'sonner';
+import { useAppStore } from '@/stores/appStore';
 
 export function PushNotificationPrompt() {
   const [isSupported, setIsSupported] = useState(false);
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [showPrompt, setShowPrompt] = useState(false);
+  const pushNotificationPromptDismissed = useAppStore((state) => state.pushNotificationPromptDismissed);
+  const setPushNotificationPromptDismissed = useAppStore((state) => state.setPushNotificationPromptDismissed);
 
   useEffect(() => {
     // Check if push notifications are supported
@@ -20,9 +23,12 @@ export function PushNotificationPrompt() {
       pushNotificationService.isSubscribed().then((subscribed) => {
         setIsSubscribed(subscribed);
         
-        // Show prompt if not subscribed and permission is default or granted
+        // Show prompt if:
+        // 1. Not subscribed
+        // 2. Permission is default or granted
+        // 3. User hasn't dismissed it before
         const permission = pushNotificationService.getPermission();
-        if (!subscribed && (permission === 'default' || permission === 'granted')) {
+        if (!subscribed && (permission === 'default' || permission === 'granted') && !pushNotificationPromptDismissed) {
           // Delay showing prompt slightly to avoid showing immediately on page load
           setTimeout(() => {
             setShowPrompt(true);
@@ -30,7 +36,7 @@ export function PushNotificationPrompt() {
         }
       });
     }
-  }, []);
+  }, [pushNotificationPromptDismissed]);
 
   const handleSubscribe = async () => {
     setIsLoading(true);
@@ -41,6 +47,8 @@ export function PushNotificationPrompt() {
       setIsSubscribed(subscribed);
       if (subscribed) {
         setShowPrompt(false);
+        // Clear dismissal flag since user enabled it (so it can show again if they unsubscribe later)
+        setPushNotificationPromptDismissed(false);
         toast.success('Push notifications enabled!');
       }
     } catch (error: any) {
@@ -108,8 +116,13 @@ export function PushNotificationPrompt() {
               <Button
                 size="sm"
                 variant="ghost"
-                onClick={() => setShowPrompt(false)}
+                onClick={() => {
+                  setShowPrompt(false);
+                  // Store dismissal in store so it doesn't show again
+                  setPushNotificationPromptDismissed(true);
+                }}
                 disabled={isLoading}
+                title="Dismiss (you can enable notifications from the notification center)"
               >
                 <X className="h-4 w-4" />
               </Button>

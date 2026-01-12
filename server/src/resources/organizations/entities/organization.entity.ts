@@ -11,6 +11,7 @@ export class Organization extends BaseEntity {
   @Column({
     type: DataType.STRING(255),
     allowNull: false,
+    unique: true,
   })
   name: string;
 
