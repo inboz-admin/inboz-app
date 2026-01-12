@@ -559,30 +559,31 @@ export class SubscriptionPaymentService {
     organizationId: string,
     existingSubscription?: Subscription | null,
   ): Promise<any> {
-    // Get or create Razorpay customer
-    const customerResult = await this.getOrCreatePaymentCustomer(
-      organization,
-      PaymentProvider.RAZORPAY,
-      existingSubscription || undefined,
-    );
+    try {
+      // Get or create Razorpay customer
+      const customerResult = await this.getOrCreatePaymentCustomer(
+        organization,
+        PaymentProvider.RAZORPAY,
+        existingSubscription || undefined,
+      );
 
-    // Create Razorpay order
-    const receiptId = `rcpt-${Date.now()}-${organizationId.substring(0, 8)}`;
-    const order = await this.razorpayService.createOrder({
-      amount: amount,
-      currency: 'USD' as any,
-      receipt: receiptId,
-      planName: plan.name,
-      planDescription: plan.description,
-      billingCycle: billingCycle === BillingCycle.YEARLY ? 'Yearly' : 'Monthly',
-      notes: {
-        organizationId,
-        planId,
-        billingCycle,
-        userCount: actualUserCount.toString(),
-        operationType,
-      },
-    });
+      // Create Razorpay order
+      const receiptId = `rcpt-${Date.now()}-${organizationId.substring(0, 8)}`;
+      const order = await this.razorpayService.createOrder({
+        amount: amount,
+        currency: 'USD' as any,
+        receipt: receiptId,
+        planName: plan.name,
+        planDescription: plan.description,
+        billingCycle: billingCycle === BillingCycle.YEARLY ? 'Yearly' : 'Monthly',
+        notes: {
+          organizationId,
+          planId,
+          billingCycle,
+          userCount: actualUserCount.toString(),
+          operationType,
+        },
+      });
 
     this.logger.log(
       `Razorpay payment initiated for organization ${organizationId}, order ${order.id}, amount: $${amount}`,
@@ -617,6 +618,35 @@ export class SubscriptionPaymentService {
       },
       paymentProvider: PaymentProvider.RAZORPAY,
     };
+    } catch (error: any) {
+      // Check if it's an authentication error
+      const errorMessage = error?.message || '';
+      const errorDetails = error?.error || error?.details || {};
+      const statusCode = errorDetails?.statusCode || error?.statusCode || error?.status;
+      
+      if (statusCode === 401 || errorMessage.toLowerCase().includes('authentication failed')) {
+        const helpfulMessage = 
+          'Razorpay authentication failed. Please check that RAZOR_PAY_KEY and RAZOR_PAY_SECRET environment variables are correctly configured with valid Razorpay API credentials.';
+        this.logger.error(helpfulMessage, {
+          organizationId,
+          planId,
+          amount,
+          error: errorMessage,
+          details: errorDetails,
+        });
+        throw new BadRequestException(helpfulMessage);
+      }
+      
+      // Re-throw other errors as-is
+      this.logger.error('Error initiating Razorpay payment:', {
+        organizationId,
+        planId,
+        amount,
+        error: errorMessage,
+        details: errorDetails,
+      });
+      throw error;
+    }
   }
 
   /**

@@ -937,8 +937,8 @@ export default function SubscriptionDetailPage() {
           </div>
           
           <div className="space-y-3">
-          {/* User Config, Billing Cycle, and Payment Provider in one row */}
-          <div className="flex flex-col lg:flex-row gap-4 p-4 border rounded-lg">
+          {/* User Config and Billing Cycle in one row */}
+          <div className="flex flex-col sm:flex-row gap-4 p-4 border rounded-lg">
             {/* Users Config */}
             <div className="flex-1 flex flex-col sm:flex-row gap-3 items-start sm:items-center min-w-0">
               <div className="flex items-center gap-3 flex-shrink-0">
@@ -1015,10 +1015,12 @@ export default function SubscriptionDetailPage() {
                 </span>
               </div>
             </div>
+          </div>
 
-            {/* Payment Provider Selector */}
-            {showProviderSelector ? (
-              <div className="flex-1 min-w-[200px] space-y-1.5">
+          {/* Payment Provider Selector in separate row */}
+          {showProviderSelector ? (
+            <div className="p-4 border rounded-lg">
+              <div className="space-y-1.5 max-w-md">
                 <label className="text-xs font-medium text-foreground">Payment Provider *</label>
                 <Select
                   value={paymentOrder?.paymentProvider || paymentProvider || ""}
@@ -1067,13 +1069,15 @@ export default function SubscriptionDetailPage() {
                   <p className="text-xs text-muted-foreground">Please select a payment provider to continue</p>
                 )}
               </div>
-            ) : subscription?.paymentProvider ? (
-              <div className="flex items-center gap-2 flex-shrink-0">
+            </div>
+          ) : subscription?.paymentProvider ? (
+            <div className="p-4 border rounded-lg">
+              <div className="flex items-center gap-2">
                 <span className="text-xs text-muted-foreground whitespace-nowrap">Payment Provider:</span>
                 <span className="text-xs font-medium">{subscription.paymentProvider}</span>
               </div>
-            ) : null}
-          </div>
+            </div>
+          ) : null}
 
           {/* Plans Grid */}
           {loadingPricing && plans.length === 0 ? (
