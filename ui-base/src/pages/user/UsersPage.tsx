@@ -41,6 +41,7 @@ import { ActionType, ModuleName } from "@/api/roleTypes";
 import { toast } from "sonner";
 import UserModal from "./UserModal";
 import InviteUserModal from "./InviteUserModal";
+import UserQuotaCalendarModal from "./UserQuotaCalendarModal";
 import { useAppStore } from "@/stores/appStore";
 import { createUserColumns } from "./columns";
 import { exportToCSVWithAudit } from "@/utils/csvExport";
@@ -59,7 +60,9 @@ export default function UsersPage() {
   const [roleFilter, setRoleFilter] = useState<string>("all");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
+  const [isQuotaModalOpen, setIsQuotaModalOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [selectedUserForQuota, setSelectedUserForQuota] = useState<User | null>(null);
   const [isViewMode, setIsViewMode] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
@@ -322,6 +325,32 @@ export default function UsersPage() {
     setUserToDelete(null);
   };
 
+  // Handle opening quota usage modal
+  const handleViewQuotaUsage = (user: User) => {
+    setSelectedUserForQuota(user);
+    setIsQuotaModalOpen(true);
+  };
+
+  // Handle closing quota modal
+  const handleCloseQuotaModal = () => {
+    setIsQuotaModalOpen(false);
+    setSelectedUserForQuota(null);
+  };
+
+  // Check if current user can view quota usage
+  // Only ADMIN, SUPERADMIN, and SUPPORT (employee) roles can view quota
+  const canViewQuotaUsage = useMemo(() => {
+    if (!user) return false;
+    const userRole = user.role?.toUpperCase();
+    const userType = user.type;
+    
+    return (
+      userRole === "ADMIN" ||
+      userRole === "SUPERADMIN" ||
+      (userType === "employee" && userRole === "SUPPORT")
+    );
+  }, [user]);
+
   // Handle CSV export
   const handleExportCSV = async () => {
     const selectedRows = table.getFilteredSelectedRowModel().rows;
@@ -383,8 +412,10 @@ export default function UsersPage() {
         onViewUser: handleViewUser,
         onEditUser: handleEditUser,
         onDeleteUser: handleDeleteClick,
+        onViewQuotaUsage: handleViewQuotaUsage,
+        canViewQuotaUsage,
       }),
-    [canPerformAction]
+    [canPerformAction, canViewQuotaUsage]
   );
 
   const table = useReactTable({
@@ -599,6 +630,13 @@ export default function UsersPage() {
           ? `${userToDelete?.firstName || ""} ${userToDelete?.lastName || ""}`.trim()
           : "NA"}
         itemType="user"
+      />
+
+      {/* Quota Usage Calendar Modal */}
+      <UserQuotaCalendarModal
+        isOpen={isQuotaModalOpen}
+        onClose={handleCloseQuotaModal}
+        user={selectedUserForQuota}
       />
     </div>
   );

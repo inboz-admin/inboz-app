@@ -8,6 +8,7 @@ import {
   Edit,
   Trash2,
   Copy,
+  Calendar,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -60,6 +61,8 @@ interface UserColumnsProps {
   onViewUser: (user: User) => void;
   onEditUser: (user: User) => void;
   onDeleteUser: (user: User) => void;
+  onViewQuotaUsage?: (user: User) => void;
+  canViewQuotaUsage?: boolean;
 }
 
 export const createUserColumns = ({
@@ -67,6 +70,8 @@ export const createUserColumns = ({
   onViewUser,
   onEditUser,
   onDeleteUser,
+  onViewQuotaUsage,
+  canViewQuotaUsage = false,
 }: UserColumnsProps): ColumnDef<User>[] => [
   {
     id: "select",
@@ -254,6 +259,15 @@ export const createUserColumns = ({
                 >
                   <Edit className="mr-2 h-4 w-4" />
                   Edit user
+                </DropdownMenuItem>
+              )}
+              {canViewQuotaUsage && onViewQuotaUsage && (
+                <DropdownMenuItem
+                  className="cursor-pointer"
+                  onClick={() => onViewQuotaUsage(user)}
+                >
+                  <Calendar className="mr-2 h-4 w-4" />
+                  View quota usage
                 </DropdownMenuItem>
               )}
               {/* {canPerformAction(ActionType.DELETE) && (
