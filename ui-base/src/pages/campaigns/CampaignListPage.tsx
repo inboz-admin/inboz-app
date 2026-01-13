@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
+import { DateTime } from 'luxon';
 import { CampaignsApi } from '../../api/campaigns';
 import type { Campaign } from '../../api/campaigns';
 import { Button } from '../../components/ui/button';
@@ -344,11 +345,7 @@ export function CampaignListPage() {
                   <TableHead className="text-left py-1 px-2">Name</TableHead>
                   <TableHead className="text-left py-1 px-2">Status</TableHead>
                   <TableHead className="text-left py-1 px-2">Progress</TableHead>
-                  <TableHead className="text-left py-1 px-2">Open</TableHead>
-                  <TableHead className="text-left py-1 px-2">Click</TableHead>
-                  <TableHead className="text-left py-1 px-2">Reply</TableHead>
-                  <TableHead className="text-left py-1 px-2">Bounce</TableHead>
-                  <TableHead className="text-left py-1 px-2">Unsubscribe</TableHead>
+                  <TableHead className="text-left py-1 px-2">Created</TableHead>
                   <TableHead className="text-left py-1 px-2">Owner</TableHead>
                   <TableHead className="text-left py-1 px-2">Actions</TableHead>
                 </TableRow>
@@ -582,19 +579,26 @@ function CampaignRow({
         )}
       </TableCell>
       <TableCell className="text-left py-1 px-2">
-        {(campaign.emailsOpened ?? 0) === 0 ? '-' : (campaign.emailsOpened ?? 0)}
-      </TableCell>
-      <TableCell className="text-left py-1 px-2">
-        {(campaign.emailsClicked ?? 0) === 0 ? '-' : (campaign.emailsClicked ?? 0)}
-      </TableCell>
-      <TableCell className="text-left py-1 px-2">
-        {(campaign.emailsReplied ?? 0) === 0 ? '-' : (campaign.emailsReplied ?? 0)}
-      </TableCell>
-      <TableCell className="text-left py-1 px-2">
-        {(campaign.emailsBounced ?? 0) === 0 ? '-' : (campaign.emailsBounced ?? 0)}
-      </TableCell>
-      <TableCell className="text-left py-1 px-2">
-        {(campaign.unsubscribes ?? 0) === 0 ? '-' : (campaign.unsubscribes ?? 0)}
+        {(() => {
+          const createdAt = (campaign as any).createdAt;
+          if (!createdAt) return <span className="text-sm text-muted-foreground">-</span>;
+          
+          try {
+            const dateTime = DateTime.fromISO(createdAt);
+            if (!dateTime.isValid) {
+              return <span className="text-sm text-muted-foreground">-</span>;
+            }
+            
+            // Format date and time on a single line using Luxon
+            const formatted = dateTime.toFormat('MMM dd, yyyy hh:mm a');
+            
+            return (
+              <span className="text-sm">{formatted}</span>
+            );
+          } catch {
+            return <span className="text-sm text-muted-foreground">-</span>;
+          }
+        })()}
       </TableCell>
       <TableCell className="text-left py-1 px-2">
         {campaign.creator ? `${campaign.creator.firstName || ''} ${campaign.creator.lastName || ''}`.trim() || campaign.creator.email : '-'}

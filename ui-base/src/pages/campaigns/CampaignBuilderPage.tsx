@@ -534,7 +534,7 @@ export function CampaignBuilderPage() {
         toast.success('Step added successfully');
       }
       
-      // Fetch campaign details after toast to get latest data (scheduled emails, estimated times, etc.)
+      // Fetch campaign details after toast to get latest data (scheduled emails, etc.)
       // Small delay to ensure backend has processed the step addition
       setTimeout(async () => {
         await loadCampaign();
@@ -935,7 +935,6 @@ export function CampaignBuilderPage() {
                         <TableHead className="text-left py-1 px-2">Name</TableHead>
                         <TableHead className="text-left py-1 px-2">Template</TableHead>
                         <TableHead className="text-left py-1 px-2">Progress</TableHead>
-                        <TableHead className="text-left py-1 px-2">Est. Time</TableHead>
                         <TableHead className="text-left py-1 px-2">Open</TableHead>
                         <TableHead className="text-left py-1 px-2">Click</TableHead>
                         <TableHead className="text-left py-1 px-2">Reply</TableHead>
@@ -1023,235 +1022,6 @@ export function CampaignBuilderPage() {
                                 // Show "Not started" for DRAFT campaigns
                                 return <span className="text-sm text-muted-foreground">Not started</span>;
                               }
-                            })()}
-                          </TableCell>
-                          <TableCell className="text-left py-1 px-2">
-                            {(() => {
-                              // Hide estimated time when step is 100% complete
-                              const progressPercentage = (step as any).progressPercentage ?? 0;
-                              if (progressPercentage >= 100) {
-                                return <span className="text-sm text-muted-foreground">-</span>;
-                              }
-                              
-                              // Calculate estimated time: schedule time (if scheduled) + time required to send all emails
-                              const totalExpected = (step as any).totalExpected ?? 0;
-                              const delayMinutes = step.delayMinutes ?? 1;
-                              
-                              if (totalExpected === 0) {
-                                return <span className="text-sm text-muted-foreground">-</span>;
-                              }
-                              
-                              const now = new Date();
-                              
-                              // Try to use actual queued emails' scheduled times if available
-                              const queuedEmails = stepQueuedEmails[step.id] || [];
-                              if (queuedEmails.length > 0) {
-                                // Find first and last scheduled send times
-                                const scheduledTimes = queuedEmails
-                                  .map(e => e.scheduledSendAt)
-                                  .filter((time): time is string => !!time)
-                                  .map(time => new Date(time))
-                                  .sort((a, b) => a.getTime() - b.getTime());
-                                
-                                if (scheduledTimes.length > 0) {
-                                  const firstScheduled = scheduledTimes[0];
-                                  const lastScheduled = scheduledTimes[scheduledTimes.length - 1];
-                                  
-                                  // Calculate estimated time based on actual scheduled times
-                                  const estimatedCompletionTime = lastScheduled;
-                                  const totalMinutes = Math.max(0, Math.ceil((estimatedCompletionTime.getTime() - now.getTime()) / (1000 * 60)));
-                                  
-                                  // Format time nicely
-                                  let timeString = '';
-                                  if (totalMinutes < 60) {
-                                    timeString = `${totalMinutes}m`;
-                                  } else if (totalMinutes < 1440) {
-                                    const hours = Math.floor(totalMinutes / 60);
-                                    const mins = totalMinutes % 60;
-                                    timeString = mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
-                                  } else {
-                                    const days = Math.floor(totalMinutes / 1440);
-                                    const hours = Math.floor((totalMinutes % 1440) / 60);
-                                    timeString = hours > 0 ? `${days}d ${hours}h` : `${days}d`;
-                                  }
-                                  
-                                  const tooltipText = `Based on actual scheduled times: First ${firstScheduled.toLocaleString()}, Last ${lastScheduled.toLocaleString()} (${queuedEmails.length} queued emails)`;
-                                  
-                                  return (
-                                    <span className="text-sm text-muted-foreground" title={tooltipText}>
-                                      {timeString}
-                                    </span>
-                                  );
-                                }
-                              }
-                              
-                              // Fallback to theoretical calculation if no queued emails
-                              const quotaDistribution = (campaign as any)?.sequenceSettings?.quotaDistribution as Array<{ day: number; startIndex: number; endIndex: number; quotaUsed: number }> | undefined;
-                              
-                              let estimatedCompletionTime: Date;
-                              let tooltipText = '';
-                              
-                              // Check if quota distribution exists (campaign spread across multiple days)
-                              if (quotaDistribution && quotaDistribution.length > 0) {
-                                // Calculate global email indices for this step
-                                const stepOrder = step.stepOrder ?? 1;
-                                const totalRecipients = campaign.totalRecipients ?? 0;
-                                
-                                // Global email indices for this step: [(stepOrder-1) * totalRecipients, stepOrder * totalRecipients - 1]
-                                const stepStartIndex = (stepOrder - 1) * totalRecipients;
-                                const stepEndIndex = stepOrder * totalRecipients - 1;
-                                
-                                // Find which days this step spans
-                                const stepDays = quotaDistribution.filter(d => 
-                                  (d.startIndex <= stepEndIndex && d.endIndex >= stepStartIndex)
-                                );
-                                
-                                if (stepDays.length > 0) {
-                                  // Get the last day this step uses
-                                  const lastDay = stepDays[stepDays.length - 1];
-                                  
-                                  // Calculate the position of the LAST email in the step
-                                  // The last email is at stepEndIndex (global index across all emails)
-                                  // We need to find its position within the last day
-                                  const lastEmailGlobalIndex = stepEndIndex;
-                                  
-                                  // Calculate emails from this step on the last day
-                                  const lastDayStepStart = Math.max(lastDay.startIndex, stepStartIndex);
-                                  const lastDayStepEnd = Math.min(lastDay.endIndex, stepEndIndex);
-                                  
-                                  // Calculate the LAST email's position within the last day
-                                  // Position within day = lastEmailGlobalIndex - lastDay.startIndex
-                                  const lastEmailPositionInDay = lastEmailGlobalIndex - lastDay.startIndex;
-                                  
-                                  // Calculate estimated completion time based on quota distribution
-                                  // The last email is scheduled at: last day midnight + (lastEmailPositionInDay * delayMinutes)
-                                  
-                                  // Calculate milliseconds until midnight IST for target day
-                                  // Approximate: each day = 24 hours (will be slightly off due to timezone, but close enough)
-                                  const msPerDay = 24 * 60 * 60 * 1000;
-                                  const msUntilTargetDay = lastDay.day * msPerDay;
-                                  
-                                  // Get current time in IST to calculate midnight
-                                  const nowISTStr = now.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' });
-                                  const nowIST = new Date(nowISTStr);
-                                  const midnightISTToday = new Date(nowIST);
-                                  midnightISTToday.setHours(0, 0, 0, 0);
-                                  
-                                  // Calculate target day midnight IST (approximately)
-                                  // Convert IST to UTC: IST is UTC+5:30, so subtract 5:30 hours
-                                  const istOffsetMs = 5.5 * 60 * 60 * 1000;
-                                  const midnightISTTargetDay = new Date(midnightISTToday.getTime() + msUntilTargetDay);
-                                  const midnightUTC = new Date(midnightISTTargetDay.getTime() - istOffsetMs);
-                                  
-                                  // Adjust for browser's local timezone
-                                  const browserTZOffset = now.getTimezoneOffset() * 60 * 1000;
-                                  const midnightUTCFinal = new Date(midnightUTC.getTime() - browserTZOffset);
-                                  
-                                  // Calculate completion time: last day midnight + time to send the LAST email
-                                  // The last email's delay from midnight = lastEmailPositionInDay * delayMinutes
-                                  const timeToSendLastEmail = lastEmailPositionInDay * delayMinutes;
-                                  estimatedCompletionTime = new Date(midnightUTCFinal.getTime() + timeToSendLastEmail * 60 * 1000);
-                                  
-                                  // If the calculated time is in the past, adjust to now + time to send
-                                  if (estimatedCompletionTime.getTime() < now.getTime()) {
-                                    const stepTotalMinutes = totalExpected * delayMinutes;
-                                    estimatedCompletionTime = new Date(now.getTime() + stepTotalMinutes * 60 * 1000);
-                                  }
-                                  
-                                  // Handle scheduled steps
-                                  let stepBaseTime = now;
-                                  if (step.triggerType === 'SCHEDULE' && step.scheduleTime) {
-                                    const scheduleTime = new Date(step.scheduleTime);
-                                    if (campaign.status === 'ACTIVE' && scheduleTime <= now) {
-                                      stepBaseTime = now;
-                                    } else {
-                                      stepBaseTime = scheduleTime;
-                                    }
-                                  }
-                                  
-                                  // If scheduled time is later than quota-based time, use scheduled time
-                                  if (stepBaseTime.getTime() > estimatedCompletionTime.getTime()) {
-                                    const stepTotalMinutes = totalExpected * delayMinutes;
-                                    estimatedCompletionTime = new Date(stepBaseTime.getTime() + stepTotalMinutes * 60 * 1000);
-                                  }
-                                  
-                                  const daysSpan = stepDays.length;
-                                  const lastEmailPos = lastEmailPositionInDay;
-                                  tooltipText = `Quota-aware: Spread across ${daysSpan} day${daysSpan !== 1 ? 's' : ''}, last email at position ${lastEmailPos} on day ${lastDay.day} (${totalExpected} emails × ${delayMinutes} min delay)`;
-                                } else {
-                                  // Fallback: use simple calculation
-                                  const timeToSendAllEmails = totalExpected * delayMinutes;
-                                  let startTime = now;
-                                  if (step.triggerType === 'SCHEDULE' && step.scheduleTime) {
-                                    const scheduleTime = new Date(step.scheduleTime);
-                                    if (campaign.status === 'ACTIVE' && scheduleTime <= now) {
-                                      startTime = now;
-                                    } else {
-                                      startTime = scheduleTime;
-                                    }
-                                  }
-                                  if (startTime.getTime() < now.getTime()) {
-                                    startTime = now;
-                                  }
-                                  estimatedCompletionTime = new Date(startTime.getTime() + timeToSendAllEmails * 60 * 1000);
-                                  tooltipText = `${totalExpected} contacts × ${delayMinutes} min delay`;
-                                }
-                              } else {
-                                // No quota distribution: use simple calculation
-                                const timeToSendAllEmails = totalExpected * delayMinutes;
-                                
-                                let startTime: Date;
-                                if (step.triggerType === 'SCHEDULE' && step.scheduleTime) {
-                                  const scheduleTime = new Date(step.scheduleTime);
-                                  if (campaign.status === 'ACTIVE' && scheduleTime <= now) {
-                                    startTime = now;
-                                  } else {
-                                    startTime = scheduleTime;
-                                  }
-                                } else {
-                                  startTime = now;
-                                }
-                                
-                                if (startTime.getTime() < now.getTime()) {
-                                  startTime = now;
-                                }
-                                
-                                estimatedCompletionTime = new Date(startTime.getTime() + timeToSendAllEmails * 60 * 1000);
-                                
-                                if (step.triggerType === 'SCHEDULE' && step.scheduleTime) {
-                                  const scheduleTime = new Date(step.scheduleTime);
-                                  if (campaign.status === 'ACTIVE' && scheduleTime <= now) {
-                                    tooltipText = `Overdue: Was scheduled for ${scheduleTime.toLocaleString()}, processing immediately + ${timeToSendAllEmails} min to send all emails`;
-                                  } else {
-                                    tooltipText = `Scheduled: ${scheduleTime.toLocaleString()} + ${timeToSendAllEmails} min to send all emails`;
-                                  }
-                                } else {
-                                  tooltipText = `${totalExpected} contacts × ${delayMinutes} min delay`;
-                                }
-                              }
-                              
-                              // Calculate total duration in minutes
-                              const totalMinutes = Math.max(0, Math.ceil((estimatedCompletionTime.getTime() - now.getTime()) / (1000 * 60)));
-                              
-                              // Format time nicely
-                              let timeString = '';
-                              if (totalMinutes < 60) {
-                                timeString = `${totalMinutes}m`;
-                              } else if (totalMinutes < 1440) {
-                                const hours = Math.floor(totalMinutes / 60);
-                                const mins = totalMinutes % 60;
-                                timeString = mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
-                              } else {
-                                const days = Math.floor(totalMinutes / 1440);
-                                const hours = Math.floor((totalMinutes % 1440) / 60);
-                                timeString = hours > 0 ? `${days}d ${hours}h` : `${days}d`;
-                              }
-                              
-                              return (
-                                <span className="text-sm text-muted-foreground" title={tooltipText}>
-                                  {timeString}
-                                </span>
-                              );
                             })()}
                           </TableCell>
                           <TableCell className="text-left py-1 px-2">
@@ -1368,6 +1138,55 @@ export function CampaignBuilderPage() {
         />
       )}
 
+      <StepModal
+        open={stepModalOpen}
+        onClose={() => { setStepModalOpen(false); setEditingStep(null); }}
+        onSave={handleSaveStep}
+        templates={templates}
+        editingStep={editingStep}
+        existingSteps={steps}
+        currentStepOrder={editingStep?.stepOrder}
+      />
+
+      {campaign.id && emailModalStepId && (
+        <EmailMessagesModal
+          open={emailModalOpen}
+          onClose={() => {
+            setEmailModalOpen(false);
+            setEmailModalStepId(null);
+            setEmailModalEventType(undefined);
+          }}
+          campaignId={campaign.id}
+          stepId={emailModalStepId}
+          eventType={emailModalEventType}
+          stepName={steps.find(s => s.id === emailModalStepId)?.name || undefined}
+        />
+      )}
+
+      {campaign.id && (
+        <CampaignMetricsModal
+          open={metricsModalOpen}
+          onClose={() => setMetricsModalOpen(false)}
+          campaign={campaign as Campaign}
+        />
+      )}
+
+      {quotaStats && quotaDialogOpen && (
+        <QuotaModeSelectionDialog
+          isOpen={quotaDialogOpen}
+          onOpenChange={setQuotaDialogOpen}
+          onConfirm={checkQuotaAndActivate}
+          onCancel={() => {
+            setQuotaDialogOpen(false);
+            setPendingActivation(false);
+            setQuotaStats(null);
+          }}
+          quotaStats={quotaStats}
+          totalEmails={(campaign.totalRecipients || 0) * steps.length}
+          estimatedDays={quotaStats ? Math.max(1, Math.ceil(((campaign.totalRecipients || 0) * steps.length - quotaStats.remaining) / quotaStats.limit)) : 1}
+        />
+      )}
+
       {quotaWarningStats && quotaWarningDialogOpen && (
         <QuotaWarningDialog
           isOpen={quotaWarningDialogOpen}
@@ -1415,7 +1234,7 @@ export function CampaignBuilderPage() {
                 </ul>
               </div>
               <p className="mt-3 text-sm">
-                These sequences will start sending emails immediately instead of waiting for their original schedule time. The estimated completion time has been adjusted accordingly.
+                These sequences will start sending emails immediately instead of waiting for their original schedule time.
               </p>
             </AlertDialogDescription>
           </AlertDialogHeader>
