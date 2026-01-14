@@ -283,6 +283,10 @@ export class RateLimiterService {
     resetAt: Date;
     percentUsed: number;
   }> {
+    this.logger.log(
+      `📈 [QUOTA-STATS] getQuotaStats called: userId=${userId}, targetDate=${targetDate ? targetDate.toISOString() : 'today'}`
+    );
+    
     try {
       const token = await this.gmailTokenModel.findOne({
         where: {
@@ -293,6 +297,9 @@ export class RateLimiterService {
 
       // Get dynamic daily limit from subscription plan
       const dailyLimit = await this.quotaManagementService.getDailyEmailLimit(userId);
+      this.logger.log(
+        `📈 [QUOTA-STATS] Daily limit: ${dailyLimit}, token found: ${token ? 'yes' : 'no'}`
+      );
 
       if (!token) {
         // Calculate next UTC midnight as default
@@ -460,20 +467,32 @@ export class RateLimiterService {
       
       // Total used = sent + queued (emails scheduled for the target day)
       used = sentCount + queuedForDay;
+      
+      this.logger.log(
+        `📈 [QUOTA-STATS] Calculation: sentCount=${sentCount}, queuedForDay=${queuedForDay}, ` +
+        `used=${used}, dailyLimit=${dailyLimit}`
+      );
+      
+      // Validation: Ensure used never exceeds limit
+      // This can happen if emails were queued before proper quota validation
+      // or due to race conditions during parallel queueing
+      if (used > dailyLimit) {
+        this.logger.warn(
+          `⚠️ [QUOTA-STATS] Quota calculation: used=${used} exceeds limit=${dailyLimit} for user ${userId}. ` +
+          `sentCount=${sentCount}, queuedForDay=${queuedForDay}. ` +
+          `Capping at limit. This may indicate emails were queued beyond quota or quota validation needs improvement.`
+        );
+        // Cap at limit to prevent negative remaining and ensure accurate display
+        used = dailyLimit;
+      }
+      
       const remaining = Math.max(0, dailyLimit - used);
       const percentUsed = (used / dailyLimit) * 100;
       
-      // Validation: Ensure used never exceeds limit (shouldn't happen, but log if it does)
-      if (used > dailyLimit) {
-        this.logger.error(
-          `🚨 CRITICAL: Quota calculation error for user ${userId}: ` +
-          `used=${used} exceeds limit=${dailyLimit}. ` +
-          `sentCount=${sentCount}, queuedForDay=${queuedForDay}. ` +
-          `This indicates a serious bug - quota may not be resetting properly or emails are being double-counted.`
-        );
-        // Cap at limit to prevent negative remaining
-        used = dailyLimit;
-      }
+      this.logger.log(
+        `📈 [QUOTA-STATS] Final result: used=${used}, limit=${dailyLimit}, ` +
+        `remaining=${remaining}, percentUsed=${percentUsed.toFixed(2)}%`
+      );
       
       // Debug: Warn if there's a potential calculation issue
       if (remaining === 0 && used < dailyLimit - 1) {
@@ -542,13 +561,21 @@ export class RateLimiterService {
     endDay: number,
     timezone: string = 'UTC',
   ): Promise<Map<number, number>> {
+    this.logger.log(
+      `🔍 [QUOTA-CALC] getRemainingQuotaForDays called: userId=${userId}, startDay=${startDay}, endDay=${endDay}, timezone=${timezone}`
+    );
+    
     const quotaMap = new Map<number, number>();
     // Get dynamic daily limit from subscription plan
     const dailyLimit = await this.quotaManagementService.getDailyEmailLimit(userId);
+    this.logger.log(`🔍 [QUOTA-CALC] Daily limit fetched: ${dailyLimit} emails/day`);
     
     // Calculate date range using step timezone
     const rangeStart = getMidnightInTimezone(startDay, timezone);
     const rangeEnd = getMidnightInTimezone(endDay + 1, timezone);
+    this.logger.log(
+      `🔍 [QUOTA-CALC] Date range: ${rangeStart.toISOString()} to ${rangeEnd.toISOString()}`
+    );
     
     // Check if today (day 0) is in range
     const todayStart = getMidnightInTimezone(0, timezone);
@@ -567,7 +594,16 @@ export class RateLimiterService {
           const quotaResetAt = new Date(token.quotaResetAt);
           if (now < quotaResetAt) {
             todayQuotaUsed = token.dailyQuotaUsed;
+            this.logger.log(
+              `🔍 [QUOTA-CALC] Token found: dailyQuotaUsed=${todayQuotaUsed}, quotaResetAt=${quotaResetAt.toISOString()}`
+            );
+          } else {
+            this.logger.log(
+              `🔍 [QUOTA-CALC] Token found but quota reset time passed: quotaResetAt=${quotaResetAt.toISOString()}, now=${now.toISOString()}`
+            );
           }
+        } else {
+          this.logger.log(`🔍 [QUOTA-CALC] No active token found for user ${userId}`);
         }
       } catch (error) {
         this.logger.warn(`Error getting token for user ${userId}: ${error}`);
@@ -597,14 +633,44 @@ export class RateLimiterService {
       raw: true,
     });
     
+    this.logger.log(
+      `🔍 [QUOTA-CALC] Found ${scheduledEmails.length} scheduled emails in date range`
+    );
+    
+    // Count emails by status for logging
+    const statusCounts = {
+      QUEUED: 0,
+      SENDING: 0,
+      SENT: 0,
+      DELIVERED: 0,
+      BOUNCED: 0,
+      FAILED: 0,
+    };
+    scheduledEmails.forEach((email: any) => {
+      if (statusCounts[email.status] !== undefined) {
+        statusCounts[email.status]++;
+      }
+    });
+    this.logger.log(
+      `🔍 [QUOTA-CALC] Email status breakdown: ${JSON.stringify(statusCounts)}`
+    );
+    
     // Group by day and count (using step timezone)
     for (let day = startDay; day <= endDay; day++) {
       const dayStart = getMidnightInTimezone(day, timezone);
       const dayEnd = getMidnightInTimezone(day + 1, timezone);
       
+      this.logger.log(
+        `🔍 [QUOTA-CALC] Processing day ${day}: ${dayStart.toISOString()} to ${dayEnd.toISOString()}`
+      );
+      
       // Count scheduled emails for this day
       let scheduledCount = 0;
       let sentCountInScheduled = 0; // Track SENT/DELIVERED emails to avoid double-counting
+      let queuedCount = 0;
+      let sendingCount = 0;
+      let bouncedCount = 0;
+      let failedCount = 0;
       
       for (const email of scheduledEmails) {
         const sendAt = new Date(email.scheduledSendAt);
@@ -616,9 +682,19 @@ export class RateLimiterService {
               sentCountInScheduled++;
             } else {
               scheduledCount++; // Count QUEUED, SENDING, BOUNCED, FAILED
+              if (email.status === EmailMessageStatus.QUEUED) queuedCount++;
+              if (email.status === EmailMessageStatus.SENDING) sendingCount++;
+              if (email.status === EmailMessageStatus.BOUNCED) bouncedCount++;
+              if (email.status === EmailMessageStatus.FAILED) failedCount++;
             }
           } else {
             scheduledCount++; // For future days, count all statuses
+            if (email.status === EmailMessageStatus.QUEUED) queuedCount++;
+            if (email.status === EmailMessageStatus.SENDING) sendingCount++;
+            if (email.status === EmailMessageStatus.SENT) sentCountInScheduled++;
+            if (email.status === EmailMessageStatus.DELIVERED) sentCountInScheduled++;
+            if (email.status === EmailMessageStatus.BOUNCED) bouncedCount++;
+            if (email.status === EmailMessageStatus.FAILED) failedCount++;
           }
         }
       }
@@ -628,19 +704,38 @@ export class RateLimiterService {
       if (day === 0) {
         // todayQuotaUsed already includes SENT/DELIVERED emails
         // scheduledCount now only includes QUEUED/SENDING/BOUNCED/FAILED
+        const beforeMerge = scheduledCount;
         scheduledCount = todayQuotaUsed + scheduledCount;
+        this.logger.log(
+          `🔍 [QUOTA-CALC] Day ${day} (TODAY) calculation: ` +
+          `todayQuotaUsed=${todayQuotaUsed} (SENT/DELIVERED from token), ` +
+          `queuedEmails=${beforeMerge} (QUEUED/SENDING/BOUNCED/FAILED from DB), ` +
+          `sentCountInScheduled=${sentCountInScheduled} (excluded from count), ` +
+          `total scheduledCount=${scheduledCount}, ` +
+          `breakdown: QUEUED=${queuedCount}, SENDING=${sendingCount}, BOUNCED=${bouncedCount}, FAILED=${failedCount}`
+        );
+      } else {
+        this.logger.log(
+          `🔍 [QUOTA-CALC] Day ${day} (FUTURE) calculation: ` +
+          `scheduledCount=${scheduledCount} (all statuses), ` +
+          `breakdown: QUEUED=${queuedCount}, SENDING=${sendingCount}, SENT/DELIVERED=${sentCountInScheduled}, BOUNCED=${bouncedCount}, FAILED=${failedCount}`
+        );
       }
       
       const remaining = Math.max(0, dailyLimit - scheduledCount);
       quotaMap.set(day, remaining);
       
-      this.logger.debug(
-        `📊 Quota for day ${day}: scheduledCount=${scheduledCount}, ` +
-        `todayQuotaUsed=${day === 0 ? todayQuotaUsed : 'N/A'}, ` +
-        `sentCountInScheduled=${day === 0 ? sentCountInScheduled : 'N/A'}, ` +
+      this.logger.log(
+        `📊 [QUOTA-CALC] Day ${day} result: ` +
+        `dailyLimit=${dailyLimit}, ` +
+        `scheduledCount=${scheduledCount}, ` +
         `remaining=${remaining}`
       );
     }
+    
+    this.logger.log(
+      `🔍 [QUOTA-CALC] getRemainingQuotaForDays completed. Quota map: ${JSON.stringify(Array.from(quotaMap.entries()))}`
+    );
     
     return quotaMap;
   }

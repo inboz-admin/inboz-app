@@ -220,19 +220,42 @@ export class CampaignSchedulingService {
 
     // 3. Calculate quota distribution
     const totalEmails = contacts.length;
+    this.logger.log(
+      `🎯 [SCHEDULE] scheduleEmailsForStep: campaignId=${campaignId}, stepId=${stepId}, totalEmails=${totalEmails}, timezone=${timezone}`
+    );
+    
     const quotaStats = await this.rateLimiterService.getQuotaStats(
       campaign.createdBy,
     );
+    this.logger.log(
+      `🎯 [SCHEDULE] Initial quota stats: ` +
+      `used=${quotaStats.used}, limit=${quotaStats.limit}, remaining=${quotaStats.remaining}, ` +
+      `percentUsed=${quotaStats.percentUsed.toFixed(2)}%, resetAt=${quotaStats.resetAt.toISOString()}`
+    );
+    
     // Get dynamic daily limit from subscription plan
     const dailyLimit = await this.quotaManagementService.getDailyEmailLimit(
       campaign.createdBy,
     );
+    this.logger.log(
+      `🎯 [SCHEDULE] Daily limit from plan: ${dailyLimit} emails/day`
+    );
+    
+    this.logger.log(
+      `🎯 [SCHEDULE] Calling calculateQuotaDistribution with: ` +
+      `totalEmails=${totalEmails}, remainingQuota=${quotaStats.remaining}, dailyLimit=${dailyLimit}`
+    );
+    
     const quotaDistribution = await this.calculateQuotaDistribution(
       campaign.createdBy,
       totalEmails,
       quotaStats.remaining,
       dailyLimit,
       timezone,
+    );
+    
+    this.logger.log(
+      `🎯 [SCHEDULE] Quota distribution received: ${JSON.stringify(quotaDistribution)}`
     );
 
     this.logger.log(
@@ -330,6 +353,11 @@ export class CampaignSchedulingService {
       quotaUsed: number;
     }>
   > {
+    this.logger.log(
+      `🚀 [QUOTA-DIST] calculateQuotaDistribution START: ` +
+      `userId=${userId}, totalEmails=${totalEmails}, remainingQuota=${remainingQuota}, dailyLimit=${dailyLimit}, timezone=${timezone}`
+    );
+    
     const distribution: Array<{
       day: number;
       startIndex: number;
@@ -342,10 +370,14 @@ export class CampaignSchedulingService {
     // Calculate maximum days needed (with safety buffer)
     const maxDaysNeeded = Math.ceil(totalEmails / dailyLimit) + SAFETY_BUFFER_DAYS;
     const maxDays = Math.min(maxDaysNeeded, MAX_SCHEDULE_DAYS);
+    
+    this.logger.log(
+      `🚀 [QUOTA-DIST] Calculated maxDays: ${maxDays} (needed: ${maxDaysNeeded}, limit: ${MAX_SCHEDULE_DAYS})`
+    );
 
     // Batch query quota for all days at once (OPTIMIZATION: Issue #4)
-    this.logger.debug(
-      `📊 Batch querying quota for days 0-${maxDays} (${maxDays + 1} days) instead of per-day queries`,
+    this.logger.log(
+      `🚀 [QUOTA-DIST] Batch querying quota for days 0-${maxDays} (${maxDays + 1} days)`
     );
     const quotaMap = await this.rateLimiterService.getRemainingQuotaForDays(
       userId,
@@ -353,14 +385,22 @@ export class CampaignSchedulingService {
       maxDays,
       timezone,
     );
+    
+    this.logger.log(
+      `🚀 [QUOTA-DIST] Quota map received: ${JSON.stringify(Array.from(quotaMap.entries()))}`
+    );
 
     while (currentIndex < totalEmails) {
       // Get remaining quota from pre-loaded map (OPTIMIZATION: Issue #4)
       const remainingForDay = quotaMap.get(day) ?? 0;
+      
+      this.logger.log(
+        `🚀 [QUOTA-DIST] Day ${day}: remainingForDay=${remainingForDay}, currentIndex=${currentIndex}, totalEmails=${totalEmails}`
+      );
 
       if (remainingForDay <= 0) {
         // No quota available for this day, skip to next day
-        this.logger.debug(`⏭️ Skipping day ${day} (no quota available)`);
+        this.logger.log(`⏭️ [QUOTA-DIST] Skipping day ${day} (no quota available: ${remainingForDay})`);
         day++;
         continue;
       }
@@ -370,6 +410,12 @@ export class CampaignSchedulingService {
         remainingForDay,
         totalEmails - currentIndex,
       );
+      
+      this.logger.log(
+        `🚀 [QUOTA-DIST] Day ${day}: emailsForDay=${emailsForDay} ` +
+        `(min of remainingForDay=${remainingForDay} and remaining=${totalEmails - currentIndex})`
+      );
+      
       if (emailsForDay > 0) {
         distribution.push({
           day,
@@ -378,8 +424,10 @@ export class CampaignSchedulingService {
           quotaUsed: emailsForDay,
         });
         currentIndex += emailsForDay;
-        this.logger.debug(
-          `✅ Scheduled ${emailsForDay} email(s) for day ${day}, remaining: ${totalEmails - currentIndex}`,
+        this.logger.log(
+          `✅ [QUOTA-DIST] Scheduled ${emailsForDay} email(s) for day ${day} ` +
+          `(indices ${currentIndex - emailsForDay} to ${currentIndex - 1}), ` +
+          `remaining emails to schedule: ${totalEmails - currentIndex}`
         );
       }
 
@@ -388,7 +436,7 @@ export class CampaignSchedulingService {
       // Safety limit: don't check beyond max schedule days
       if (day > MAX_SCHEDULE_DAYS) {
         this.logger.error(
-          `Quota distribution exceeded ${MAX_SCHEDULE_DAYS} days. Remaining emails: ${totalEmails - currentIndex}`,
+          `❌ [QUOTA-DIST] Quota distribution exceeded ${MAX_SCHEDULE_DAYS} days. Remaining emails: ${totalEmails - currentIndex}`,
         );
         break;
       }
@@ -398,13 +446,15 @@ export class CampaignSchedulingService {
     const totalDistributed = distribution.reduce((sum, d) => sum + d.quotaUsed, 0);
     if (totalDistributed < totalEmails) {
       this.logger.warn(
-        `⚠️ Quota distribution incomplete: ${totalDistributed}/${totalEmails} emails distributed. ` +
+        `⚠️ [QUOTA-DIST] Quota distribution incomplete: ${totalDistributed}/${totalEmails} emails distributed. ` +
         `This might indicate insufficient quota or a calculation error.`
       );
     }
 
     this.logger.log(
-      `📊 Quota distribution calculated: ${totalDistributed}/${totalEmails} emails across ${distribution.length} day(s) using batch query (instead of ${day} per-day queries)`,
+      `📊 [QUOTA-DIST] calculateQuotaDistribution COMPLETE: ` +
+      `${totalDistributed}/${totalEmails} emails across ${distribution.length} day(s). ` +
+      `Distribution: ${JSON.stringify(distribution)}`
     );
 
     return distribution;
@@ -637,6 +687,7 @@ export class CampaignSchedulingService {
         );
       } else {
         // Immediate step: Preserve start time from day 0 on future days
+        // This ensures emails start at the same time of day as when the campaign was activated
         // Get the first email time from day 0 (which is the activation time)
         const firstEmailTimeDay0 = firstEmailMap.get(0);
         if (firstEmailTimeDay0) {
@@ -650,7 +701,7 @@ export class CampaignSchedulingService {
           // Get midnight of target day in step timezone
           const midnight = getMidnightInTimezone(day, timezone);
           
-          // Apply preserved start time to that day
+          // Apply preserved start time to that day (same time as campaign start)
           effectiveBaseTime = new Date(midnight.getTime() + 
             startHour * 3600000 + startMinute * 60000 + startSecond * 1000);
           this.logger.debug(
