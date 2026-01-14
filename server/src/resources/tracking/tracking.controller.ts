@@ -130,9 +130,13 @@ export class TrackingController {
       // Return an HTML confirmation page
       const html = `
         <!DOCTYPE html>
-        <html>
+        <html lang="en">
         <head>
-          <title>Unsubscribed</title>
+          <meta charset="UTF-8" />
+          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+          <title>Unsubscribed - Inboz</title>
+          <link rel="icon" type="image/svg+xml" href="https://inboz.io/favicon.svg" />
+          <link rel="icon" type="image/x-icon" href="https://inboz.io/favicon.ico" />
           <style>
             body {
               font-family: Arial, sans-serif;
@@ -175,9 +179,13 @@ export class TrackingController {
       // Return error page
       const errorHtml = `
         <!DOCTYPE html>
-        <html>
+        <html lang="en">
         <head>
-          <title>Unsubscribe Error</title>
+          <meta charset="UTF-8" />
+          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+          <title>Unsubscribe Error - Inboz</title>
+          <link rel="icon" type="image/svg+xml" href="https://inboz.io/favicon.svg" />
+          <link rel="icon" type="image/x-icon" href="https://inboz.io/favicon.ico" />
           <style>
             body {
               font-family: Arial, sans-serif;

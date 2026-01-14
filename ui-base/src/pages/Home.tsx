@@ -10,6 +10,8 @@ import { Marquee } from "@/components/magicui/marquee";
 import { BackgroundLines } from "@/components/ui/background-lines";
 import { useTheme } from "@/components/providers";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
+import { useSEO } from "@/hooks";
+import { StructuredData, defaultOrganizationData, defaultWebSiteData } from "@/components/seo";
 import {
   Mail,
   Zap,
@@ -344,6 +346,16 @@ export default function Landing() {
   const navigate = useNavigate();
   const [billingCycle, setBillingCycle] = useState<"MONTHLY" | "YEARLY">("MONTHLY");
   const [isPricingCalculatorOpen, setIsPricingCalculatorOpen] = useState(false);
+
+  // SEO configuration for homepage
+  useSEO({
+    title: "Inboz - Email Campaign Management Platform for Organizations",
+    description:
+      "Comprehensive email campaign management platform for organizations. Manage contacts, email campaigns, templates, analytics, and more with our powerful system.",
+    keywords:
+      "email marketing, campaign management, email campaigns, contact management, CRM, email automation, marketing automation",
+    canonicalUrl: "https://inboz.io/",
+  });
 
   const handleTryNow = () => {
     navigate("/get-started");
@@ -1192,6 +1204,10 @@ export default function Landing() {
         open={isPricingCalculatorOpen}
         onOpenChange={setIsPricingCalculatorOpen}
       />
+
+      {/* Structured Data for SEO */}
+      <StructuredData data={defaultOrganizationData} id="organization-data" />
+      <StructuredData data={defaultWebSiteData} id="website-data" />
     </div>
   );
 }

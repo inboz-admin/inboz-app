@@ -1,0 +1,16 @@
+# robots.txt for Inboz
+User-agent: *
+Allow: /
+Allow: /docs/
+Allow: /terms
+Allow: /privacy
+Allow: /get-started
+
+# Disallow private/dashboard routes
+Disallow: /dashboard/
+Disallow: /auth/
+Disallow: /admin/
+Disallow: /platform/
+
+# Sitemap location
+Sitemap: https://inboz.io/sitemap.xml
