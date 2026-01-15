@@ -311,21 +311,21 @@ export function LoginForm({
       <div className="text-muted-foreground text-center text-xs text-balance">
         By clicking continue, you agree to our{" "}
         <a
-          href="/terms"
+          href="/terms-and-conditions"
           onClick={(e) => {
             e.preventDefault();
-            navigate("/terms");
+            navigate("/terms-and-conditions");
           }}
           className="underline underline-offset-4 hover:text-primary font-semibold"
         >
-          Terms of Service
+          Terms and Conditions
         </a>{" "}
         and{" "}
         <a
-          href="/privacy"
+          href="/privacy-policy"
           onClick={(e) => {
             e.preventDefault();
-            navigate("/privacy");
+            navigate("/privacy-policy");
           }}
           className="underline underline-offset-4 hover:text-primary font-semibold"
         >

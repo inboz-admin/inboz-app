@@ -7,6 +7,7 @@ import {
   Res,
   UnauthorizedException,
   Body,
+  Logger,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { AuthenticationService } from './authentication.service';
@@ -21,6 +22,7 @@ import { GoogleAuthGuard } from './guards/google-auth.guard';
 import { GoogleGmailAuthGuard } from './guards/google-gmail-auth.guard';
 import { ConfigService } from '@nestjs/config';
 import { JwtPayload } from 'src/configuration/jwt/interfaces/jwt-payload.interface';
+import { RiscService } from './services/risc.service';
 
 interface AuthenticatedRequest extends Request {
   user?: JwtPayload & {
@@ -40,11 +42,14 @@ interface OAuthCallbackRequest extends Request {
 
 @Controller()
 export class AuthenticationController {
+  private readonly logger = new Logger(AuthenticationController.name);
+
   constructor(
     private readonly authenticationService: AuthenticationService,
     private readonly employeeAuthenticationService: EmployeeAuthenticationService,
     private readonly passwordResetService: PasswordResetService,
     private readonly configService: ConfigService,
+    private readonly riscService: RiscService,
   ) {}
 
   @Public()
@@ -122,6 +127,68 @@ export class AuthenticationController {
       success: true,
       message: 'Tokens revoked successfully',
     };
+  }
+
+  /**
+   * RISC (Cross-Account Protection) webhook endpoint
+   * Receives security events from Google about token revocations and account compromises
+   * 
+   * Reference: https://developers.google.com/identity/protocols/risc
+   * 
+   * Google sends RISC events as JWT tokens in the request body.
+   * The endpoint should be registered in Google Cloud Console.
+   */
+  @Public()
+  @Post('risc/events')
+  async handleRiscEvent(@Req() req: Request, @Res() res: Response) {
+    try {
+      // RISC events are sent as JWT tokens in the request body
+      // Format can be: { assertion: "JWT_TOKEN" } or { jwt: "JWT_TOKEN" } or just the JWT string
+      let token: string | undefined;
+      
+      if (typeof req.body === 'string') {
+        // Body is directly the JWT token
+        token = req.body;
+      } else if (req.body?.assertion) {
+        token = req.body.assertion;
+      } else if (req.body?.jwt) {
+        token = req.body.jwt;
+      } else if (req.body?.token) {
+        token = req.body.token;
+      }
+      
+      if (!token || typeof token !== 'string') {
+        this.logger.warn('RISC event received without JWT token', { body: req.body });
+        return res.status(400).json({
+          success: false,
+          message: 'Missing JWT token in request',
+        });
+      }
+
+      // Verify the JWT token signature
+      const verifiedEvent = await this.riscService.verifyRiscToken(token);
+      
+      // Process the RISC event
+      await this.riscService.processRiscEvent(verifiedEvent);
+
+      // Return 200 OK to acknowledge receipt (required by Google)
+      return res.status(200).json({
+        success: true,
+        message: 'RISC event processed successfully',
+      });
+    } catch (error) {
+      this.logger.error(
+        `Failed to process RISC event: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        error instanceof Error ? error.stack : undefined,
+      );
+      
+      // Return 200 OK even on error to prevent Google from retrying excessively
+      // Log the error for investigation
+      return res.status(200).json({
+        success: false,
+        message: 'RISC event processing failed (logged for investigation)',
+      });
+    }
   }
 
   @Get('me')

@@ -610,7 +610,7 @@ export default function CampaignsPage() {
 
       <div className="grid gap-4 md:grid-cols-2 my-6">
         <a
-          href="/docs/contacts"
+          href="/documentation/contacts"
           className="block p-4 border border-border rounded-lg hover:bg-accent transition-colors"
         >
           <h3 className="text-base font-bold mb-1">Contacts</h3>
@@ -619,7 +619,7 @@ export default function CampaignsPage() {
           </p>
         </a>
         <a
-          href="/docs/contact-lists"
+          href="/documentation/contact-lists"
           className="block p-4 border border-border rounded-lg hover:bg-accent transition-colors"
         >
           <h3 className="text-base font-bold mb-1">Contact Lists</h3>
@@ -628,7 +628,7 @@ export default function CampaignsPage() {
           </p>
         </a>
         <a
-          href="/docs/templates"
+          href="/documentation/templates"
           className="block p-4 border border-border rounded-lg hover:bg-accent transition-colors"
         >
           <h3 className="text-base font-bold mb-1">Email Templates</h3>
@@ -637,7 +637,7 @@ export default function CampaignsPage() {
           </p>
         </a>
         <a
-          href="/docs/analytics"
+          href="/documentation/analytics"
           className="block p-4 border border-border rounded-lg hover:bg-accent transition-colors"
         >
           <h3 className="text-base font-bold mb-1">Analytics</h3>

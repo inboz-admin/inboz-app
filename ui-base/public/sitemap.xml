@@ -22,92 +22,99 @@
   
   <!-- Legal Pages -->
   <url>
-    <loc>https://inboz.io/terms</loc>
+    <loc>https://inboz.io/terms-and-conditions</loc>
     <lastmod>2026-01-15</lastmod>
     <changefreq>yearly</changefreq>
     <priority>0.5</priority>
   </url>
   
   <url>
-    <loc>https://inboz.io/privacy</loc>
+    <loc>https://inboz.io/privacy-policy</loc>
     <lastmod>2026-01-15</lastmod>
     <changefreq>yearly</changefreq>
     <priority>0.5</priority>
+  </url>
+  
+  <url>
+    <loc>https://inboz.io/support</loc>
+    <lastmod>2026-01-15</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
   </url>
   
   <!-- Documentation Pages -->
   <url>
-    <loc>https://inboz.io/docs</loc>
+    <loc>https://inboz.io/documentation</loc>
     <lastmod>2026-01-15</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   
   <url>
-    <loc>https://inboz.io/docs/overview</loc>
+    <loc>https://inboz.io/documentation/overview</loc>
     <lastmod>2026-01-15</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   
   <url>
-    <loc>https://inboz.io/docs/analytics</loc>
+    <loc>https://inboz.io/documentation/analytics</loc>
     <lastmod>2026-01-15</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   
   <url>
-    <loc>https://inboz.io/docs/organizations</loc>
+    <loc>https://inboz.io/documentation/organizations</loc>
     <lastmod>2026-01-15</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   
   <url>
-    <loc>https://inboz.io/docs/user-management</loc>
+    <loc>https://inboz.io/documentation/user-management</loc>
     <lastmod>2026-01-15</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   
   <url>
-    <loc>https://inboz.io/docs/contacts</loc>
+    <loc>https://inboz.io/documentation/contacts</loc>
     <lastmod>2026-01-15</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   
   <url>
-    <loc>https://inboz.io/docs/contact-lists</loc>
+    <loc>https://inboz.io/documentation/contact-lists</loc>
     <lastmod>2026-01-15</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   
   <url>
-    <loc>https://inboz.io/docs/templates</loc>
+    <loc>https://inboz.io/documentation/templates</loc>
     <lastmod>2026-01-15</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   
   <url>
-    <loc>https://inboz.io/docs/campaigns</loc>
+    <loc>https://inboz.io/documentation/campaigns</loc>
     <lastmod>2026-01-15</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   
   <url>
-    <loc>https://inboz.io/docs/subscriptions</loc>
+    <loc>https://inboz.io/documentation/subscriptions</loc>
     <lastmod>2026-01-15</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   
   <url>
-    <loc>https://inboz.io/docs/system</loc>
+    <loc>https://inboz.io/documentation/system</loc>
     <lastmod>2026-01-15</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>

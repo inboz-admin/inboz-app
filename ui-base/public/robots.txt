@@ -1,9 +1,10 @@
 # robots.txt for Inboz
 User-agent: *
 Allow: /
-Allow: /docs/
-Allow: /terms
-Allow: /privacy
+Allow: /documentation/
+Allow: /terms-and-conditions
+Allow: /privacy-policy
+Allow: /support
 Allow: /get-started
 
 # Disallow private/dashboard routes

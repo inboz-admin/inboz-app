@@ -297,15 +297,15 @@ export default function SystemPage() {
       <h2>Related Documentation</h2>
       <ul>
         <li>
-          <a href="/docs/user-management">User Management</a> - Learn about users and
+          <a href="/documentation/user-management">User Management</a> - Learn about users and
           permissions
         </li>
         <li>
-          <a href="/docs/organizations">Organizations</a> - Understand organization
+          <a href="/documentation/organizations">Organizations</a> - Understand organization
           management
         </li>
         <li>
-          <a href="/docs/analytics">Analytics</a> - View system-wide analytics
+          <a href="/documentation/analytics">Analytics</a> - View system-wide analytics
         </li>
       </ul>
     </DocContent>

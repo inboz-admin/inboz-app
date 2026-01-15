@@ -24,14 +24,11 @@ import type { UserWiseAnalytics } from "@/api/analyticsTypes";
 import { Button } from "@/components/ui/button";
 import { Download, FileX } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { DataTablePagination, EmailDetailsModal } from "@/components/common";
+import { DataTablePagination } from "@/components/common";
 import { exportToCSVWithAudit } from "@/utils/csvExport";
-import { toast } from "sonner";
 import { useAppStore } from "@/stores/appStore";
 
-type MetricClickHandler = (userId: string, userName: string, metric: string, count: number) => void;
-
-const createColumns = (onMetricClick: MetricClickHandler): ColumnDef<UserWiseAnalytics>[] => [
+const createColumns = (): ColumnDef<UserWiseAnalytics>[] => [
   {
     accessorKey: "fullName",
     header: "User Name",
@@ -76,14 +73,9 @@ const createColumns = (onMetricClick: MetricClickHandler): ColumnDef<UserWiseAna
     accessorKey: "emailsSent",
     header: () => <div className="text-center">Sent</div>,
     cell: ({ row }) => {
-      const count = row.original.emailsSent;
       return (
-        <div 
-          className="text-center font-medium cursor-pointer hover:text-primary hover:underline"
-          onClick={() => count > 0 && onMetricClick(row.original.userId, row.original.fullName, 'sent', count)}
-          title={count > 0 ? "Click to view details" : undefined}
-        >
-          {count.toLocaleString()}
+        <div className="text-center font-medium">
+          {row.original.emailsSent.toLocaleString()}
         </div>
       );
     },
@@ -92,14 +84,9 @@ const createColumns = (onMetricClick: MetricClickHandler): ColumnDef<UserWiseAna
     accessorKey: "emailsBounced",
     header: () => <div className="text-center">Bounced</div>,
     cell: ({ row }) => {
-      const count = row.original.emailsBounced;
       return (
-        <div 
-          className="text-center font-medium cursor-pointer hover:text-primary hover:underline"
-          onClick={() => count > 0 && onMetricClick(row.original.userId, row.original.fullName, 'bounced', count)}
-          title={count > 0 ? "Click to view details" : undefined}
-        >
-          {count.toLocaleString()}
+        <div className="text-center font-medium">
+          {row.original.emailsBounced.toLocaleString()}
         </div>
       );
     },
@@ -108,14 +95,9 @@ const createColumns = (onMetricClick: MetricClickHandler): ColumnDef<UserWiseAna
     accessorKey: "emailsOpened",
     header: () => <div className="text-center">Opened</div>,
     cell: ({ row }) => {
-      const count = row.original.emailsOpened;
       return (
-        <div 
-          className="text-center font-medium cursor-pointer hover:text-primary hover:underline"
-          onClick={() => count > 0 && onMetricClick(row.original.userId, row.original.fullName, 'opened', count)}
-          title={count > 0 ? "Click to view details" : undefined}
-        >
-          {count.toLocaleString()}
+        <div className="text-center font-medium">
+          {row.original.emailsOpened.toLocaleString()}
         </div>
       );
     },
@@ -124,14 +106,9 @@ const createColumns = (onMetricClick: MetricClickHandler): ColumnDef<UserWiseAna
     accessorKey: "emailsClicked",
     header: () => <div className="text-center">Clicked</div>,
     cell: ({ row }) => {
-      const count = row.original.emailsClicked;
       return (
-        <div 
-          className="text-center font-medium cursor-pointer hover:text-primary hover:underline"
-          onClick={() => count > 0 && onMetricClick(row.original.userId, row.original.fullName, 'clicked', count)}
-          title={count > 0 ? "Click to view details" : undefined}
-        >
-          {count.toLocaleString()}
+        <div className="text-center font-medium">
+          {row.original.emailsClicked.toLocaleString()}
         </div>
       );
     },
@@ -140,14 +117,9 @@ const createColumns = (onMetricClick: MetricClickHandler): ColumnDef<UserWiseAna
     accessorKey: "emailsReplied",
     header: () => <div className="text-center">Replied</div>,
     cell: ({ row }) => {
-      const count = row.original.emailsReplied;
       return (
-        <div 
-          className="text-center font-medium cursor-pointer hover:text-primary hover:underline"
-          onClick={() => count > 0 && onMetricClick(row.original.userId, row.original.fullName, 'replied', count)}
-          title={count > 0 ? "Click to view details" : undefined}
-        >
-          {count.toLocaleString()}
+        <div className="text-center font-medium">
+          {row.original.emailsReplied.toLocaleString()}
         </div>
       );
     },
@@ -156,14 +128,9 @@ const createColumns = (onMetricClick: MetricClickHandler): ColumnDef<UserWiseAna
     accessorKey: "unsubscribes",
     header: () => <div className="text-center">Unsubscribed</div>,
     cell: ({ row }) => {
-      const count = row.original.unsubscribes;
       return (
-        <div 
-          className="text-center font-medium cursor-pointer hover:text-primary hover:underline"
-          onClick={() => count > 0 && onMetricClick(row.original.userId, row.original.fullName, 'unsubscribed', count)}
-          title={count > 0 ? "Click to view details" : undefined}
-        >
-          {count.toLocaleString()}
+        <div className="text-center font-medium">
+          {row.original.unsubscribes.toLocaleString()}
         </div>
       );
     },
@@ -222,28 +189,13 @@ export function UserAnalyticsTable({
 }: UserAnalyticsTableProps) {
   const { user } = useAppStore();
   const [sorting, setSorting] = React.useState<SortingState>([]);
-  const [modalOpen, setModalOpen] = React.useState(false);
-  const [selectedUser, setSelectedUser] = React.useState<{ id: string; name: string } | null>(null);
-  const [selectedMetric, setSelectedMetric] = React.useState<{ type: string; count: number } | null>(null);
-
-  const handleMetricClick = (userId: string, userName: string, metric: string, count: number) => {
-    // Show alert if count is 0
-    if (count === 0) {
-      toast.info(`No ${metric} emails found for this user`);
-      return;
-    }
-
-    setSelectedUser({ id: userId, name: userName });
-    setSelectedMetric({ type: metric, count });
-    setModalOpen(true);
-  };
 
   const pagination: PaginationState = {
     pageIndex: currentPage - 1, // TanStack uses 0-based indexing
     pageSize: pageSize,
   };
 
-  const columns = React.useMemo(() => createColumns(handleMetricClick), []);
+  const columns = React.useMemo(() => createColumns(), []);
 
   const table = useReactTable({
     data: data || [],
@@ -416,23 +368,6 @@ export function UserAnalyticsTable({
           <DataTablePagination table={table} totalCount={totalCount} />
         </div>
       </div>
-
-      {/* Email Details Modal */}
-      {selectedUser && selectedMetric && (
-        <EmailDetailsModal
-          open={modalOpen}
-          onClose={() => {
-            setModalOpen(false);
-            setSelectedUser(null);
-            setSelectedMetric(null);
-          }}
-          title={`${selectedUser.name} - ${selectedMetric.type.charAt(0).toUpperCase() + selectedMetric.type.slice(1)} Emails`}
-          userId={selectedUser.id}
-          organizationId={user?.organizationId}
-          filterType={selectedMetric.type as 'all' | 'sent' | 'bounced' | 'opened' | 'clicked' | 'replied' | 'unsubscribed'}
-          initialTotalCount={selectedMetric.count}
-        />
-      )}
     </div>
   );
 }

@@ -3,6 +3,7 @@ import { PassportStrategy } from '@nestjs/passport';
 import { Strategy, VerifyCallback } from 'passport-google-oauth20';
 import { ConfigService } from '@nestjs/config';
 import { AuthenticationService } from '../authentication.service';
+import { OAuthStateService } from '../services/oauth-state.service';
 import axios from 'axios';
 
 @Injectable()
@@ -12,6 +13,7 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
   constructor(
     private readonly configService: ConfigService,
     private readonly authService: AuthenticationService,
+    private readonly stateService: OAuthStateService,
   ) {
     super({
       clientID: configService.get('GOOGLE_CLIENT_ID'),
@@ -24,11 +26,23 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
     });
   }
 
-  authorizationParams(): Record<string, string> {
+  authorizationParams(options: any): Record<string, string> {
+    // Generate state token synchronously for CSRF protection
+    const state = this.stateService.generateStateToken();
+    
+    // Store state asynchronously (fire-and-forget with error handling)
+    this.stateService.storeState(state, {
+      type: 'google',
+      timestamp: Date.now(),
+    }).catch((error) => {
+      this.logger.warn(`Failed to store OAuth state: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    });
+
     return {
       access_type: 'offline',
       prompt: 'consent',
       include_granted_scopes: 'true',
+      state: state,
     };
   }
 

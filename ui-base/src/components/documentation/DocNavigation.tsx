@@ -9,11 +9,11 @@ export function DocNavigation() {
 
   const isActive = (url: string) => {
     if (url === "#") return false;
-    if (url === "/docs/overview") {
+    if (url === "/documentation/overview") {
       return (
-        location.pathname === "/docs" ||
-        location.pathname === "/docs/" ||
-        location.pathname === "/docs/overview"
+        location.pathname === "/documentation" ||
+        location.pathname === "/documentation/" ||
+        location.pathname === "/documentation/overview"
       );
     }
     // Check if it's an anchor link

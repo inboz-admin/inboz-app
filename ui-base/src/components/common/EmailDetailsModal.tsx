@@ -58,7 +58,7 @@ interface EmailDetailsModalProps {
   campaignName?: string;
   userId?: string;
   organizationId?: string;
-  filterType?: 'all' | 'sent' | 'bounced' | 'opened' | 'clicked';
+  filterType?: 'all' | 'sent' | 'bounced' | 'opened' | 'clicked' | 'replied' | 'unsubscribed';
   initialTotalCount?: number;
 }
 

@@ -763,7 +763,7 @@ export default function SubscriptionsPage() {
 
       <div className="grid gap-4 md:grid-cols-2 my-6">
         <a
-          href="/docs/organizations"
+          href="/documentation/organizations"
           className="block p-4 border border-border rounded-lg hover:bg-accent transition-colors"
         >
           <h3 className="text-base font-bold mb-1">Organizations</h3>
@@ -772,7 +772,7 @@ export default function SubscriptionsPage() {
           </p>
         </a>
         <a
-          href="/docs/analytics"
+          href="/documentation/analytics"
           className="block p-4 border border-border rounded-lg hover:bg-accent transition-colors"
         >
           <h3 className="text-base font-bold mb-1">Analytics</h3>
@@ -781,7 +781,7 @@ export default function SubscriptionsPage() {
           </p>
         </a>
         <a
-          href="/docs/campaigns"
+          href="/documentation/campaigns"
           className="block p-4 border border-border rounded-lg hover:bg-accent transition-colors"
         >
           <h3 className="text-base font-bold mb-1">Campaigns</h3>
@@ -790,7 +790,7 @@ export default function SubscriptionsPage() {
           </p>
         </a>
         <a
-          href="/docs/user-management"
+          href="/documentation/user-management"
           className="block p-4 border border-border rounded-lg hover:bg-accent transition-colors"
         >
           <h3 className="text-base font-bold mb-1">User Management</h3>

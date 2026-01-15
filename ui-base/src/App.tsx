@@ -28,7 +28,7 @@ import { SubscriptionsPage } from "@/pages/subscriptions";
 import SubscriptionDetailPage from "@/pages/subscriptions/SubscriptionDetailPage";
 import { InvoicesPage } from "@/pages/invoices";
 import { AnalyticsPage } from "@/pages/analytics";
-import { TermsOfServicePage, PrivacyPolicyPage } from "@/pages/legal";
+import { TermsOfServicePage, PrivacyPolicyPage, SupportPage } from "@/pages/legal";
 import { ProtectedRouteWithRole } from "@/components/auth";
 import { ThemeProvider } from "@/components/providers";
 
@@ -75,14 +75,15 @@ function App() {
             <Route path="/" element={<Home />} />
             {/* <Route path="/login" element={<LoginPage />} /> */}
             <Route path="/get-started" element={<GetStartedPage />} />
-            <Route path="/terms" element={<TermsOfServicePage />} />
-            <Route path="/privacy" element={<PrivacyPolicyPage />} />
+            <Route path="/terms-and-conditions" element={<TermsOfServicePage />} />
+            <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
+            <Route path="/support" element={<SupportPage />} />
             <Route path="/auth/error" element={<AuthErrorPage />} />
             <Route path="/auth/callback" element={<OAuthCallbackPage />} />
             <Route path="/admin/login" element={<EmployeeLoginPage />} />
             <Route path="/platform/login" element={<EmployeeLoginPage />} />
-            <Route path="/docs" element={<DocumentationLayout />}>
-              <Route index element={<Navigate to="/docs/overview" replace />} />
+            <Route path="/documentation" element={<DocumentationLayout />}>
+              <Route index element={<Navigate to="/documentation/overview" replace />} />
               <Route path="overview" element={<OverviewPage />} />
               <Route path="analytics" element={<AnalyticsDocPage />} />
               <Route path="organizations" element={<OrganizationsDocPage />} />

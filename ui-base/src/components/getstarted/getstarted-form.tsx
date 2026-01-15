@@ -117,10 +117,10 @@ export function GetStartedForm({
               <p className="text-xs text-muted-foreground">
                 By logging in, you agree to our{" "}
                 <a
-                  href="/privacy"
+                  href="/privacy-policy"
                   onClick={(e) => {
                     e.preventDefault();
-                    navigate("/privacy");
+                    navigate("/privacy-policy");
                   }}
                   className="text-primary hover:underline font-medium transition-colors cursor-pointer"
                 >
@@ -128,14 +128,14 @@ export function GetStartedForm({
                 </a>{" "}
                 and{" "}
                 <a
-                  href="/terms"
+                  href="/terms-and-conditions"
                   onClick={(e) => {
                     e.preventDefault();
-                    navigate("/terms");
+                    navigate("/terms-and-conditions");
                   }}
                   className="text-primary hover:underline font-medium transition-colors cursor-pointer"
                 >
-                  Terms of Service
+                  Terms and Conditions
                 </a>
                 .
               </p>

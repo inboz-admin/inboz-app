@@ -42,16 +42,11 @@ function Header() {
     navigate("/get-started");
   };
 
-  const handleEnquiry = () => {
-    navigate("/enquiry");
-  };
-
   const navigation = [
     { name: "Features", href: "#features" },
     { name: "How It Works", href: "#how-it-works" },
     { name: "Pricing", href: "#pricing" },
-    { name: "Contact", href: "#contact" },
-    { name: "Enquiry", href: "/enquiry" },
+    { name: "Documentation", href: "/documentation" },
   ];
 
   return (
@@ -69,21 +64,18 @@ function Header() {
 
           {/* Desktop Navigation */}
           <nav className="hidden md:flex items-center space-x-8">
-            {navigation.map((item) =>
-              item.name === "Enquiry" ? (
-                <button
-                  key={item.name}
-                  onClick={handleEnquiry}
-                  className="text-muted-foreground hover:text-primary font-medium transition-colors cursor-pointer"
-                >
-                  {item.name}
-                </button>
-              ) : (
-                <a
-                  key={item.name}
-                  href={item.href}
-                  className="text-muted-foreground hover:text-primary font-medium transition-colors cursor-pointer"
-                  onClick={(e) => {
+            {navigation.map((item) => (
+              <a
+                key={item.name}
+                href={item.href}
+                className="text-muted-foreground hover:text-primary font-medium transition-colors cursor-pointer"
+                onClick={(e) => {
+                  if (item.href.startsWith("/")) {
+                    // Route navigation
+                    e.preventDefault();
+                    navigate(item.href);
+                  } else {
+                    // Scroll to section
                     e.preventDefault();
                     const targetId = item.href.substring(1);
                     const element = document.getElementById(targetId);
@@ -93,12 +85,12 @@ function Header() {
                         block: "start",
                       });
                     }
-                  }}
-                >
-                  {item.name}
-                </a>
-              )
-            )}
+                  }
+                }}
+              >
+                {item.name}
+              </a>
+            ))}
           </nav>
 
           {/* Desktop Actions */}
@@ -141,26 +133,19 @@ function Header() {
             className="md:hidden py-4 border-t border-border"
           >
             <nav className="flex flex-col space-y-4">
-              {navigation.map((item) =>
-                item.name === "Enquiry" ? (
-                  <button
-                    key={item.name}
-                    onClick={() => {
-                      handleEnquiry();
-                      setIsMenuOpen(false);
-                    }}
-                    className="text-muted-foreground hover:text-primary font-medium transition-colors cursor-pointer text-left"
-                  >
-                    {item.name}
-                  </button>
-                ) : (
-                  <a
-                    key={item.name}
-                    href={item.href}
-                    className="text-muted-foreground hover:text-primary font-medium transition-colors cursor-pointer"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      setIsMenuOpen(false);
+              {navigation.map((item) => (
+                <a
+                  key={item.name}
+                  href={item.href}
+                  className="text-muted-foreground hover:text-primary font-medium transition-colors cursor-pointer"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setIsMenuOpen(false);
+                    if (item.href.startsWith("/")) {
+                      // Route navigation
+                      navigate(item.href);
+                    } else {
+                      // Scroll to section
                       const targetId = item.href.substring(1);
                       const element = document.getElementById(targetId);
                       if (element) {
@@ -169,12 +154,12 @@ function Header() {
                           block: "start",
                         });
                       }
-                    }}
-                  >
-                    {item.name}
-                  </a>
-                )
-              )}
+                    }
+                  }}
+                >
+                  {item.name}
+                </a>
+              ))}
               <div className="flex flex-col space-y-2 pt-4 border-t border-border">
                 {/* Mobile Theme Toggle */}
                 <div className="flex justify-start">
@@ -206,11 +191,10 @@ function Footer() {
   const navigate = useNavigate();
 
   const footerLinks = [
-    { name: "Terms", href: "/terms" },
-    { name: "Privacy", href: "/privacy" },
-    { name: "Documentation", href: "/docs" },
-    { name: "Pricing", href: "#pricing" },
-    { name: "Contact", href: "#contact" },
+    { name: "Terms", href: "/terms-and-conditions" },
+    { name: "Privacy", href: "/privacy-policy" },
+    { name: "Support", href: "/support" },
+    { name: "Documentation", href: "/documentation" },
   ];
 
   return (
@@ -365,9 +349,6 @@ export default function Landing() {
     navigate("/get-started");
   };
 
-  const handleEnquiry = () => {
-    navigate("/enquiry");
-  };
 
   const painPoints = [
     {
@@ -1068,7 +1049,7 @@ export default function Landing() {
             className="mt-12 text-center space-y-2"
           >
             <p className="text-sm text-muted-foreground">
-              Need more than 50 users? <span className="text-primary cursor-pointer hover:underline" onClick={handleEnquiry}>Contact Sales</span>
+              Need more than 50 users? <a href="mailto:support@inboz.io" className="text-primary cursor-pointer hover:underline">Contact Sales</a>
             </p>
             <p className="text-sm text-muted-foreground">
               Want to calculate your exact pricing?{" "}
@@ -1084,7 +1065,7 @@ export default function Landing() {
       </section>
 
       {/* FAQ Section */}
-      <section id="contact" className="py-20 bg-background scroll-mt-16">
+      <section id="faq" className="py-20 bg-background scroll-mt-16">
         <div className="w-full px-6">
           <motion.div
             initial={{ opacity: 0, y: 30 }}
