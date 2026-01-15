@@ -78,22 +78,10 @@ export class CampaignAnalyticsService implements ICampaignAnalyticsService {
     let totalCount = 0;
 
     if (eventType === 'OPENED') {
-      // Get total count
+      // Get total count - simple approach like BOUNCED/UNSUBSCRIBED
+      whereConditions.openedAt = { [Op.ne]: null };
       totalCount = await this.emailMessageModel.count({
         where: whereConditions,
-        include: [
-          {
-            model: this.emailTrackingEventModel,
-            as: 'trackingEvents',
-            where: {
-              eventType: EmailEventType.OPENED,
-            },
-            required: true,
-            separate: true,
-          },
-        ],
-        distinct: true,
-        col: 'email_messages.id',
       });
 
       const emails = await this.emailMessageModel.findAll({
@@ -130,22 +118,10 @@ export class CampaignAnalyticsService implements ICampaignAnalyticsService {
         };
       });
     } else if (eventType === 'CLICKED') {
-      // Get total count
+      // Get total count - simple approach like BOUNCED/UNSUBSCRIBED
+      whereConditions.clickedAt = { [Op.ne]: null };
       totalCount = await this.emailMessageModel.count({
         where: whereConditions,
-        include: [
-          {
-            model: this.emailTrackingEventModel,
-            as: 'trackingEvents',
-            where: {
-              eventType: EmailEventType.CLICKED,
-            },
-            required: true,
-            separate: true,
-          },
-        ],
-        distinct: true,
-        col: 'email_messages.id',
       });
 
       const emails = await this.emailMessageModel.findAll({
@@ -183,25 +159,11 @@ export class CampaignAnalyticsService implements ICampaignAnalyticsService {
         };
       });
     } else if (eventType === 'REPLIED') {
-      // Get total count
+      // Get total count - simple approach like BOUNCED/UNSUBSCRIBED
+      whereConditions.repliedAt = { [Op.ne]: null };
+      whereConditions.replyCount = { [Op.gt]: 0 };
       totalCount = await this.emailMessageModel.count({
-        where: {
-          ...whereConditions,
-          replyCount: { [Op.gt]: 0 },
-        },
-        include: [
-          {
-            model: this.emailTrackingEventModel,
-            as: 'trackingEvents',
-            where: {
-              eventType: EmailEventType.REPLIED,
-            },
-            required: true,
-            separate: true,
-          },
-        ],
-        distinct: true,
-        col: 'email_messages.id',
+        where: whereConditions,
       });
 
       const emails = await this.emailMessageModel.findAll({

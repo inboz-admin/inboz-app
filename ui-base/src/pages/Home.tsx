@@ -107,7 +107,7 @@ function Header() {
               Sign In
             </Button> */}
             <Button onClick={handleGetStarted} className="cursor-pointer">
-              Get Started
+              Sign In
             </Button>
           </div>
 
@@ -175,7 +175,7 @@ function Header() {
                   Sign In
                 </Button> */}
                 <Button onClick={handleGetStarted} className="cursor-pointer">
-                  Get Started
+                  Sign In
                 </Button>
               </div>
             </nav>
@@ -489,8 +489,7 @@ export default function Landing() {
                 transition={{ duration: 0.8, delay: 0.2 }}
               >
                 All-in-one email marketing platform with drag-and-drop builder,
-                smart automation, and analytics that actually matter. No coding
-                required.
+                smart automation, and analytics that actually matter.
               </motion.p>
 
               <motion.div
@@ -547,13 +546,13 @@ export default function Landing() {
                 className="flex justify-center items-center gap-6 sm:gap-8 lg:gap-12 mt-16 px-4"
               >
                 <div className="text-center">
-                  <AnimatedCounter value="5K+" />
+                  <AnimatedCounter value="50+" />
                   <p className="text-sm text-muted-foreground mt-1">
                     Businesses
                   </p>
                 </div>
                 <div className="text-center">
-                  <AnimatedCounter value="1M+" />
+                  <AnimatedCounter value="50K+" />
                   <p className="text-sm text-muted-foreground mt-1">
                     Emails Sent
                   </p>
@@ -669,7 +668,7 @@ export default function Landing() {
           >
             <h2 className="text-4xl lg:text-5xl font-bold mb-6">
               <span className="bg-gradient-to-b from-foreground to-muted-foreground bg-clip-text text-transparent">
-                Join 50,000+ Businesses Growing With Inboz
+                Join 50+ Businesses Growing With Inboz
               </span>
             </h2>
             <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
@@ -681,18 +680,17 @@ export default function Landing() {
           <Marquee className="py-8" pauseOnHover={true}>
             {testimonials.map((testimonial) => (
               <div key={testimonial.company} className="text-center mx-4">
-                <Card className="h-full border border-border shadow-sm hover:shadow-md transition-shadow bg-card p-6 w-80">
-                  <div className="text-4xl font-bold text-primary mb-2">
+                <Card className="h-full border border-border shadow-sm hover:shadow-md transition-shadow bg-card p-4 w-64">
+                  <div className="text-3xl font-bold text-primary mb-2">
                     {testimonial.result}
                   </div>
-                  <div className="text-lg font-semibold text-foreground mb-1">
+                  <div className="text-sm font-semibold text-foreground mb-1">
                     {testimonial.company}
                   </div>
-                  <div className="text-sm text-muted-foreground mb-2">
+                  <div className="text-xs text-muted-foreground mb-2">
                     {testimonial.companyName}
                   </div>
-                  <div className="text-2xl mb-3 text-foreground">★★★★★</div>
-                  <p className="text-sm text-muted-foreground leading-relaxed">
+                  <p className="text-xs text-muted-foreground leading-relaxed">
                     {testimonial.description}
                   </p>
                 </Card>
