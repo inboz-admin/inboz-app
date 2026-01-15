@@ -81,9 +81,9 @@ export class BullConfig {
     
     const specificOptions: Record<string, Partial<WorkerOptions>> = {
       [QueueName.EMAIL_SENDER]: {
-        concurrency: 10, // Higher concurrency for email sending
+        concurrency: 20, // Higher concurrency for email sending (scaled for 3 worker instances)
         limiter: {
-          max: 25, // Gmail API daily limit per user
+          max: 40, // Increased rate limit per worker (3 workers = 120 jobs/sec total capacity)
           duration: 1000, // Per second
         },
       },

@@ -63,12 +63,12 @@ export class ScheduledTasksService {
     @Inject(forwardRef(() => NotificationEventService))
     private readonly notificationEventService?: NotificationEventService,
   ) {
-    // Get intervals from config (default: every 2 hours)
+    // Get intervals from config (default: every 6 hours)
     const isProduction = this.configService.get('NODE_ENV') === 'production';
     this.bounceDetectionInterval = this.configService.get('BOUNCE_DETECTION_INTERVAL') || 
-      '0 */2 * * *'; // Every 2 hours at minute 0
+      '0 */6 * * *'; // Every 6 hours at minute 0
     this.replyDetectionInterval = this.configService.get('REPLY_DETECTION_INTERVAL') || 
-      '0 */2 * * *'; // Every 2 hours at minute 0
+      '0 */6 * * *'; // Every 6 hours at minute 0
   }
 
   /**
@@ -226,7 +226,7 @@ export class ScheduledTasksService {
    * Enqueues jobs for individual accounts instead of processing directly
    * Interval is configurable via BOUNCE_DETECTION_INTERVAL env var
    */
-  @Cron('0 */2 * * *') // Default: every 2 hours at minute 0 (overridden by config)
+  @Cron('0 */6 * * *') // Default: every 6 hours at minute 0 (overridden by config)
   async checkForBounces() {
     const schedulerName = 'BounceDetectionScheduler';
     this.schedulerHealthService.recordStart(schedulerName);
@@ -312,7 +312,7 @@ export class ScheduledTasksService {
    * Enqueues jobs for individual accounts instead of processing directly
    * Interval is configurable via REPLY_DETECTION_INTERVAL env var
    */
-  @Cron('0 */2 * * *') // Default: every 2 hours at minute 0 (overridden by config)
+  @Cron('0 */6 * * *') // Default: every 6 hours at minute 0 (overridden by config)
   async checkForReplies() {
     const schedulerName = 'ReplyDetectionScheduler';
     this.schedulerHealthService.recordStart(schedulerName);

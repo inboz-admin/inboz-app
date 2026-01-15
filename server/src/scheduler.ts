@@ -33,8 +33,8 @@ async function bootstrap() {
     logger.log('📋 Active schedulers:');
     logger.log('   - Daily quota reset (midnight UTC)');
     logger.log('   - Campaign completion check (every 5 minutes)');
-    logger.log('   - Bounce detection (every 2 hours)');
-    logger.log('   - Reply detection (every 2 hours)');
+    logger.log('   - Bounce detection (every 6 hours)');
+    logger.log('   - Reply detection (every 6 hours)');
     logger.log('   - Selection session cleanup (every 6 hours)');
     logger.log('⚠️  IMPORTANT: Only run ONE instance of the scheduler process!');
     logger.log('📈 Press Ctrl+C to stop');
