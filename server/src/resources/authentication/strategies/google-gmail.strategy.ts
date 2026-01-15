@@ -6,20 +6,25 @@ import { AuthenticationService } from '../authentication.service';
 import axios from 'axios';
 
 @Injectable()
-export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
-  private readonly logger = new Logger(GoogleStrategy.name);
+export class GoogleGmailStrategy extends PassportStrategy(Strategy, 'google-gmail') {
+  private readonly logger = new Logger(GoogleGmailStrategy.name);
 
   constructor(
     private readonly configService: ConfigService,
     private readonly authService: AuthenticationService,
   ) {
+    // Construct Gmail-specific callback URL from the base callback URL
+    const baseCallbackUrl = configService.get('GOOGLE_CALLBACK_URL');
+    // Replace /google/callback with /google/gmail/callback
+    const gmailCallbackUrl = baseCallbackUrl.replace('/google/callback', '/google/gmail/callback');
+    
     super({
       clientID: configService.get('GOOGLE_CLIENT_ID'),
       clientSecret: configService.get('GOOGLE_CLIENT_SECRET'),
-      callbackURL: configService.get('GOOGLE_CALLBACK_URL'),
+      callbackURL: gmailCallbackUrl,
       scope: [
-        'email',
-        'profile',
+        'https://www.googleapis.com/auth/gmail.readonly',
+        'https://www.googleapis.com/auth/gmail.send',
       ],
     });
   }

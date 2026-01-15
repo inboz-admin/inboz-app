@@ -22,6 +22,11 @@ import { QuotaModeSelectionDialog } from '@/components/campaigns/QuotaModeSelect
 import { userService } from '@/api/userService';
 import { roleService } from '@/api/roleService';
 import { ActionType, ModuleName } from '@/api/roleTypes';
+import { gmailScopeService } from '@/api/gmailScopeService';
+import { GmailScopeModal } from '@/components/auth/GmailScopePrompt';
+import { useSearchParams } from 'react-router-dom';
+import { ShieldCheck, ShieldAlert } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 export function CampaignListPage() {
   const [items, setItems] = useState<Campaign[]>([]);
@@ -49,6 +54,10 @@ export function CampaignListPage() {
   } | null>(null);
   const [pendingActivation, setPendingActivation] = useState<{ campaign: Campaign; totalEmails: number } | null>(null);
   const [moduleActions, setModuleActions] = useState<ActionType[]>([]);
+  const [hasGmailScopes, setHasGmailScopes] = useState<boolean | null>(null);
+  const [checkingScopes, setCheckingScopes] = useState(true);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [gmailModalOpen, setGmailModalOpen] = useState(false);
 
   const handleDeleteClick = (campaign: Campaign) => {
     setCampaignToDelete(campaign);
@@ -108,6 +117,76 @@ export function CampaignListPage() {
         if (showLoading) setLoading(false);
       });
   }, [user, page, limit, searchTerm, statusFilter, selectedOrganizationId]);
+
+  // Check Gmail scopes on mount
+  useEffect(() => {
+    const checkScopes = async () => {
+      if (!user) {
+        setCheckingScopes(false);
+        setHasGmailScopes(false);
+        return;
+      }
+
+      setCheckingScopes(true);
+      try {
+        const response = await gmailScopeService.checkGmailScopes();
+        console.log('[CampaignListPage] Scope check response:', response);
+        
+        // Handle nested response structure from SuccessInterceptor
+        let scopeData = null;
+        if (response.success && response.data) {
+          // Check if data is nested (from SuccessInterceptor)
+          const data = response.data as any;
+          if (data?.success !== undefined && data?.data) {
+            scopeData = data.data;
+          } else {
+            // Direct data structure
+            scopeData = response.data;
+          }
+        }
+        
+        if (scopeData && typeof scopeData.hasAllGmailScopes === 'boolean') {
+          const hasAllScopes = scopeData.hasAllGmailScopes;
+          console.log('[CampaignListPage] Has all Gmail scopes:', hasAllScopes, 'Scopes:', scopeData);
+          setHasGmailScopes(hasAllScopes);
+        } else {
+          // If API call fails, assume scopes are missing to show prompt
+          console.warn('[CampaignListPage] Scope check failed or returned no data:', response);
+          setHasGmailScopes(false);
+        }
+      } catch (error) {
+        // If error occurs, assume scopes are missing to show prompt
+        console.error('[CampaignListPage] Failed to check Gmail scopes:', error);
+        setHasGmailScopes(false);
+      } finally {
+        setCheckingScopes(false);
+      }
+    };
+
+    checkScopes();
+  }, [user]);
+
+  // Check for successful Gmail authorization from URL params
+  useEffect(() => {
+    const gmailAuthorized = searchParams.get('gmail_authorized');
+    if (gmailAuthorized === 'true') {
+      toast.success('Gmail access granted! You can now use campaign features.');
+      setSearchParams({}, { replace: true });
+      // Re-check scopes
+      gmailScopeService.checkGmailScopes().then((response) => {
+        if (response.success && response.data) {
+          // Handle nested response structure
+          const data = response.data as any;
+          const scopeData = (data?.success !== undefined && data?.data) 
+            ? data.data 
+            : response.data;
+          if (scopeData && typeof scopeData.hasAllGmailScopes === 'boolean') {
+            setHasGmailScopes(scopeData.hasAllGmailScopes);
+          }
+        }
+      });
+    }
+  }, [searchParams, setSearchParams]);
 
   // Fetch module actions when user is available
   useEffect(() => {
@@ -325,7 +404,35 @@ export function CampaignListPage() {
           </Select>
         </div>
         {canPerformAction(ActionType.CREATE) && (
-          <Button onClick={() => navigate('/dashboard/campaigns/new')}>New Campaign</Button>
+          <div className="flex items-center gap-2">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => setGmailModalOpen(true)}
+                  className="h-9 w-9"
+                >
+                  {hasGmailScopes === true ? (
+                    <ShieldCheck className="h-4 w-4 text-green-600 dark:text-green-400" />
+                  ) : (
+                    <ShieldAlert className="h-4 w-4 text-red-600 dark:text-red-400" />
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                {hasGmailScopes === true 
+                  ? "Gmail permissions granted - Click to view details"
+                  : "Gmail permissions required - Click to grant access"}
+              </TooltipContent>
+            </Tooltip>
+            <Button 
+              onClick={() => navigate('/dashboard/campaigns/new')}
+              disabled={hasGmailScopes !== true}
+            >
+              New Campaign
+            </Button>
+          </div>
         )}
       </div>
       {loading ? (
@@ -498,6 +605,14 @@ export function CampaignListPage() {
           estimatedDays={quotaStats ? Math.max(1, Math.ceil((pendingActivation.totalEmails - quotaStats.remaining) / quotaStats.limit)) : 1}
         />
       )}
+
+      {/* Gmail Scope Modal */}
+      <GmailScopeModal
+        open={gmailModalOpen}
+        onOpenChange={setGmailModalOpen}
+        hasScopes={hasGmailScopes === true}
+        onAuthorize={() => setGmailModalOpen(false)}
+      />
     </div>
   );
 }

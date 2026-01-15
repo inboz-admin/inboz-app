@@ -18,6 +18,7 @@ import { ResetPasswordDto } from './dto/reset-password.dto';
 import { Public } from 'src/configuration/jwt/public.decorator';
 import { AuthGuard } from '@nestjs/passport';
 import { GoogleAuthGuard } from './guards/google-auth.guard';
+import { GoogleGmailAuthGuard } from './guards/google-gmail-auth.guard';
 import { ConfigService } from '@nestjs/config';
 import { JwtPayload } from 'src/configuration/jwt/interfaces/jwt-payload.interface';
 
@@ -67,6 +68,60 @@ export class AuthenticationController {
     return res.redirect(
       `${frontendUrl}/auth/callback?token=${encodeURIComponent(result.access_token)}&refresh=${encodeURIComponent(result.refresh_token)}`,
     );
+  }
+
+  @Public()
+  @Get('google/gmail')
+  @UseGuards(AuthGuard('google-gmail'))
+  async googleGmailAuth() {
+    // This will redirect to Google OAuth for Gmail scopes
+  }
+
+  @Public()
+  @Get('google/gmail/callback')
+  @UseGuards(GoogleGmailAuthGuard)
+  async googleGmailCallback(@Req() req: OAuthCallbackRequest, @Res() res: Response) {
+    const frontendUrl = this.configService.get('FRONTEND_URL');
+    const result = req.user;
+
+    if (!result?.access_token) {
+      return res.redirect(
+        `${frontendUrl}/dashboard/campaigns?error=invalid_user&message=${encodeURIComponent('Invalid user data received')}`,
+      );
+    }
+
+    // Redirect back to campaigns page with tokens for authentication
+    return res.redirect(
+      `${frontendUrl}/auth/callback?token=${encodeURIComponent(result.access_token)}&refresh=${encodeURIComponent(result.refresh_token)}&gmail_authorized=true`,
+    );
+  }
+
+  @Get('scopes')
+  async getScopes(@Req() req: AuthenticatedRequest) {
+    if (!req.user) {
+      throw new UnauthorizedException('Not authenticated');
+    }
+
+    const scopes = await this.authenticationService.getUserScopes(req.user.sub);
+
+    return {
+      success: true,
+      data: scopes,
+    };
+  }
+
+  @Post('revoke')
+  async revokeTokens(@Req() req: AuthenticatedRequest) {
+    if (!req.user) {
+      throw new UnauthorizedException('Not authenticated');
+    }
+
+    await this.authenticationService.revokeUserTokens(req.user.sub);
+
+    return {
+      success: true,
+      message: 'Tokens revoked successfully',
+    };
   }
 
   @Get('me')

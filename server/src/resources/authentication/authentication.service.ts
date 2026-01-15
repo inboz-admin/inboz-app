@@ -26,6 +26,8 @@ import { validateEmailDomain as validateEmailDomainUtil } from 'src/common/utils
 import { Transaction } from 'sequelize';
 import { AuthResponse } from './utils/auth-response.interface';
 import { ERRORS, TOKEN_EXPIRY } from './utils/auth.constants';
+import axios from 'axios';
+import { GmailTokenStatus } from '../users/entities/gmail-oauth-token.entity';
 
 @Injectable()
 export class AuthenticationService {
@@ -212,13 +214,32 @@ export class AuthenticationService {
           socialData.refreshToken,
         );
       }
+      
+      const wasRevoked = existingToken.status === GmailTokenStatus.REVOKED;
+      
       if (socialData.scopes && socialData.scopes.length > 0) {
-        existingToken.scopes = socialData.scopes;
+        if (wasRevoked) {
+          // If token was revoked, REPLACE scopes with new ones (fresh authorization)
+          existingToken.scopes = socialData.scopes;
+        } else {
+          // Merge scopes for incremental authorization (adding new scopes to existing)
+          const existingScopes = existingToken.scopes || [];
+          const newScopes = socialData.scopes;
+          const mergedScopes = [...new Set([...existingScopes, ...newScopes])];
+          existingToken.scopes = mergedScopes;
+        }
       }
+      
       const now = new Date();
       existingToken.tokenExpiresAt = new Date(Date.now() + TOKEN_EXPIRY.ACCESS_TOKEN_MS);
       existingToken.lastUsedAt = now;
       existingToken.grantedAt = now;
+      
+      // Reactivate token if it was previously revoked (new login after revocation)
+      if (wasRevoked) {
+        existingToken.status = GmailTokenStatus.ACTIVE;
+        existingToken.revokedAt = null;
+      }
       await existingToken.save({ transaction });
     } else {
       // Set quota reset to UTC midnight (global reset)
@@ -393,5 +414,108 @@ export class AuthenticationService {
     }
 
     return this.buildAuthResponse(result.user, result.organization, result.tokens);
+  }
+
+  async getUserScopes(userId: string): Promise<{
+    scopes: string[];
+    hasEmail: boolean;
+    hasProfile: boolean;
+    hasGmailReadonly: boolean;
+    hasGmailSend: boolean;
+    hasAllGmailScopes: boolean;
+  }> {
+    const token = await GmailOAuthToken.findOne({
+      where: {
+        userId,
+        status: GmailTokenStatus.ACTIVE,
+      },
+    });
+
+    if (!token) {
+      return {
+        scopes: [],
+        hasEmail: false,
+        hasProfile: false,
+        hasGmailReadonly: false,
+        hasGmailSend: false,
+        hasAllGmailScopes: false,
+      };
+    }
+
+    const scopes = token.scopes || [];
+    const gmailReadonlyScope = 'https://www.googleapis.com/auth/gmail.readonly';
+    const gmailSendScope = 'https://www.googleapis.com/auth/gmail.send';
+    const emailScope = 'email';
+    const profileScope = 'profile';
+    const openidScope = 'openid';
+    const userinfoEmailScope = 'https://www.googleapis.com/auth/userinfo.email';
+    const userinfoProfileScope = 'https://www.googleapis.com/auth/userinfo.profile';
+
+    const hasEmail = scopes.includes(emailScope) || scopes.includes(userinfoEmailScope) || scopes.includes(openidScope);
+    const hasProfile = scopes.includes(profileScope) || scopes.includes(userinfoProfileScope) || scopes.includes(openidScope);
+    const hasGmailReadonly = scopes.includes(gmailReadonlyScope);
+    const hasGmailSend = scopes.includes(gmailSendScope);
+    const hasAllGmailScopes = hasGmailReadonly && hasGmailSend;
+
+    return {
+      scopes,
+      hasEmail,
+      hasProfile,
+      hasGmailReadonly,
+      hasGmailSend,
+      hasAllGmailScopes,
+    };
+  }
+
+  async revokeUserTokens(userId: string): Promise<void> {
+    const token = await GmailOAuthToken.findOne({
+      where: {
+        userId,
+        status: GmailTokenStatus.ACTIVE,
+      },
+    });
+
+    if (!token) {
+      this.logger.warn(`No active token found for user ${userId} to revoke`);
+      return;
+    }
+
+    try {
+      // Decrypt access token to revoke it
+      const accessToken = await this.cryptoUtilityService.decrypt(
+        token.accessTokenEncrypted,
+      );
+
+      // Revoke token at Google
+      try {
+        await axios.post(
+          'https://oauth2.googleapis.com/revoke',
+          new URLSearchParams({ token: accessToken }),
+          {
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+            },
+          },
+        );
+        this.logger.log(`Successfully revoked token at Google for user ${userId}`);
+      } catch (error) {
+        this.logger.error(
+          `Failed to revoke token at Google for user ${userId}: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        );
+        // Continue with local revocation even if Google revocation fails
+      }
+
+      // Update token status locally
+      token.status = GmailTokenStatus.REVOKED;
+      token.revokedAt = new Date();
+      await token.save();
+
+      this.logger.log(`Successfully revoked tokens for user ${userId}`);
+    } catch (error) {
+      this.logger.error(
+        `Failed to revoke tokens for user ${userId}: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      );
+      throw error;
+    }
   }
 }

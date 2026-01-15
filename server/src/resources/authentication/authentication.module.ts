@@ -10,7 +10,9 @@ import { User } from '../users/entities/user.entity';
 import { GmailOAuthToken } from '../users/entities/gmail-oauth-token.entity';
 import { Organization } from '../organizations/entities/organization.entity';
 import { GoogleStrategy } from './strategies/google.strategy';
+import { GoogleGmailStrategy } from './strategies/google-gmail.strategy';
 import { GoogleAuthGuard } from './guards/google-auth.guard';
+import { GoogleGmailAuthGuard } from './guards/google-gmail-auth.guard';
 import { PassportModule } from '@nestjs/passport';
 import { ConfigService } from '@nestjs/config';
 import { SubscriptionsModule } from '../subscriptions/subscriptions.module';
@@ -36,6 +38,7 @@ import { AuditLogsModule } from '../audit-logs/audit-logs.module';
     PasswordResetService,
     PasswordResetTokenRepository,
     GoogleAuthGuard,
+    GoogleGmailAuthGuard,
     {
       provide: GoogleStrategy,
       useFactory: (
@@ -45,6 +48,18 @@ import { AuditLogsModule } from '../audit-logs/audit-logs.module';
         const clientId = configService.get('GOOGLE_CLIENT_ID');
         const clientSecret = configService.get('GOOGLE_CLIENT_SECRET');
         return new GoogleStrategy(configService, authService);
+      },
+      inject: [ConfigService, AuthenticationService],
+    },
+    {
+      provide: GoogleGmailStrategy,
+      useFactory: (
+        configService: ConfigService,
+        authService: AuthenticationService,
+      ) => {
+        const clientId = configService.get('GOOGLE_CLIENT_ID');
+        const clientSecret = configService.get('GOOGLE_CLIENT_SECRET');
+        return new GoogleGmailStrategy(configService, authService);
       },
       inject: [ConfigService, AuthenticationService],
     },
