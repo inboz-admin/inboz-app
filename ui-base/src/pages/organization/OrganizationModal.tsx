@@ -41,6 +41,7 @@ import {
   CommonTimezones,
 } from "@/api/organizationTypes";
 import { organizationService } from "@/api/organizationService";
+import { useAppStore } from "@/stores/appStore";
 
 /**
  * Generates a random organization name following cloud resource naming patterns
@@ -201,6 +202,7 @@ export default function OrganizationModal({
   isReadOnly = false,
   userOrganizationId,
 }: OrganizationModalProps) {
+  const { clearOrganizationCache, setOrganizationCache } = useAppStore();
   const [loading, setLoading] = useState(false);
 
   const form = useForm<OrganizationFormData>({
@@ -306,6 +308,31 @@ export default function OrganizationModal({
       }
 
       if (response.success) {
+        // If organization was updated, clear cache and update with new data
+        if (organization && response.data) {
+          const orgId = organization.id;
+          // Clear the old cache entry
+          clearOrganizationCache(orgId);
+          
+          // Update cache with new organization data (including new timezone)
+          if (response.data.timezone) {
+            setOrganizationCache(orgId, {
+              id: orgId,
+              timezone: response.data.timezone,
+              name: response.data.name,
+            });
+          }
+        } else if (response.data) {
+          // For new organizations, cache the timezone
+          if (response.data.id && response.data.timezone) {
+            setOrganizationCache(response.data.id, {
+              id: response.data.id,
+              timezone: response.data.timezone,
+              name: response.data.name,
+            });
+          }
+        }
+        
         toast.success(
           organization
             ? "Organization updated successfully"

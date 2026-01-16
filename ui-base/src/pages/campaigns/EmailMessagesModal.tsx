@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -8,7 +8,8 @@ import {
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { CampaignsApi } from '@/api/campaigns';
-import { format } from 'date-fns';
+import { formatDateTime } from '@/utils/dateFormat';
+import { useOrganizationTimezone } from '@/hooks/useOrganizationTimezone';
 import { DataTablePagination } from '@/components/common';
 import {
   useReactTable,
@@ -80,6 +81,25 @@ export function EmailMessagesModal({
   useEffect(() => {
     setPagination(prev => ({ ...prev, pageIndex: 0 }));
   }, [eventTypeFilter]);
+
+  // Get organization timezone
+  const timezone = useOrganizationTimezone();
+
+  const formatDate = useCallback((dateString?: string | null) => {
+    if (!dateString) return '-';
+    try {
+      return formatDateTime(dateString, timezone);
+    } catch {
+      return dateString;
+    }
+  }, [timezone]);
+
+  const getContactName = useCallback((email: EmailMessage) => {
+    if (email.contact?.firstName || email.contact?.lastName) {
+      return `${email.contact.firstName || ''} ${email.contact.lastName || ''}`.trim();
+    }
+    return email.contact?.email || '-';
+  }, []);
 
   useEffect(() => {
     if (open && campaignId && stepId) {
@@ -309,7 +329,7 @@ export function EmailMessagesModal({
       ),
       size: 150,
     },
-  ], []);
+  ], [formatDate, getContactName]);
 
   // Create table instance
   const table = useReactTable({
@@ -323,23 +343,6 @@ export function EmailMessagesModal({
     },
     onPaginationChange: setPagination,
   });
-
-
-  const formatDate = (dateString?: string | null) => {
-    if (!dateString) return '-';
-    try {
-      return format(new Date(dateString), 'MMM dd, yyyy HH:mm');
-    } catch {
-      return dateString;
-    }
-  };
-
-  const getContactName = (email: EmailMessage) => {
-    if (email.contact?.firstName || email.contact?.lastName) {
-      return `${email.contact.firstName || ''} ${email.contact.lastName || ''}`.trim();
-    }
-    return email.contact?.email || '-';
-  };
 
   return (
     <Dialog open={open} onOpenChange={onClose}>

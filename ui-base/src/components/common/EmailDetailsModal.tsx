@@ -11,6 +11,8 @@ import { Download } from 'lucide-react';
 import { CampaignsApi } from '@/api/campaigns';
 import { analyticsService } from '@/api/analyticsService';
 import { format } from 'date-fns';
+import { formatDateTime } from '@/utils/dateFormat';
+import { useOrganizationTimezone } from '@/hooks/useOrganizationTimezone';
 import { DataTablePagination } from '@/components/common';
 import { exportToCSV } from '@/utils/csvExport';
 import { toast } from 'sonner';
@@ -92,10 +94,13 @@ export function EmailDetailsModal({
     return email.contact?.email || 'Unknown';
   };
 
+  // Get organization timezone
+  const timezone = useOrganizationTimezone();
+
   const formatDate = (dateString?: string) => {
     if (!dateString) return '-';
     try {
-      return format(new Date(dateString), 'MMM dd, yyyy HH:mm');
+      return formatDateTime(dateString, timezone);
     } catch {
       return '-';
     }

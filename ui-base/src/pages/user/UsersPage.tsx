@@ -46,6 +46,7 @@ import { useAppStore } from "@/stores/appStore";
 import { createUserColumns } from "./columns";
 import { exportToCSVWithAudit } from "@/utils/csvExport";
 import { NoDataState } from "@/components/common/NoDataState";
+import { useOrganizationTimezone } from "@/hooks/useOrganizationTimezone";
 
 export default function UsersPage() {
   const [sorting, setSorting] = useState<SortingState>([]);
@@ -77,6 +78,9 @@ export default function UsersPage() {
 
   // Get user data from store
   const { user, selectedOrganizationId } = useAppStore();
+  
+  // Get organization timezone
+  const timezone = useOrganizationTimezone();
   
   // For employees, use selectedOrganizationId; for regular users, use organizationId
   const getOrganizationId = () => {
@@ -414,8 +418,9 @@ export default function UsersPage() {
         onDeleteUser: handleDeleteClick,
         onViewQuotaUsage: handleViewQuotaUsage,
         canViewQuotaUsage,
+        timezone,
       }),
-    [canPerformAction, canViewQuotaUsage]
+    [canPerformAction, canViewQuotaUsage, timezone]
   );
 
   const table = useReactTable({

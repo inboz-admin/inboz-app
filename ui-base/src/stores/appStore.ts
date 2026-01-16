@@ -4,6 +4,12 @@ import type { User } from "@/api/authService";
 
 export type Theme = "light" | "dark" | "system";
 
+interface OrganizationCache {
+  id: string;
+  timezone: string;
+  name?: string;
+}
+
 interface AppState {
   // Theme state
   theme: Theme;
@@ -16,6 +22,12 @@ interface AppState {
   setSelectedOrganizationId: (orgId: string | null) => void;
   platformView: boolean; // For SUPERADMIN analytics platform view
   setPlatformView: (enabled: boolean) => void;
+  
+  // Organization cache (for timezone and other org data)
+  organizationsCache: Record<string, OrganizationCache>;
+  setOrganizationCache: (orgId: string, orgData: OrganizationCache) => void;
+  getOrganizationFromCache: (orgId: string) => OrganizationCache | null;
+  clearOrganizationCache: (orgId?: string) => void; // Clear specific org or all orgs
 
   // UI state
   sidebarOpen: boolean;
@@ -55,6 +67,7 @@ const initialState = {
   pushNotificationPromptDismissed: false,
   isLoading: false,
   notifications: [],
+  organizationsCache: {} as Record<string, OrganizationCache>,
 };
 
 export const useAppStore = create<AppState>()(
@@ -67,6 +80,31 @@ export const useAppStore = create<AppState>()(
       setUser: (user) => set({ user }),
       setSelectedOrganizationId: (selectedOrganizationId) => set({ selectedOrganizationId }),
       setPlatformView: (platformView) => set({ platformView }),
+      
+      setOrganizationCache: (orgId: string, orgData: OrganizationCache) =>
+        set((state) => ({
+          organizationsCache: {
+            ...state.organizationsCache,
+            [orgId]: orgData,
+          },
+        })),
+      getOrganizationFromCache: (orgId: string) => {
+        const state = get();
+        return state.organizationsCache[orgId] || null;
+      },
+      clearOrganizationCache: (orgId?: string) => {
+        if (orgId) {
+          // Clear specific organization
+          set((state) => {
+            const newCache = { ...state.organizationsCache };
+            delete newCache[orgId];
+            return { organizationsCache: newCache };
+          });
+        } else {
+          // Clear all organizations
+          set({ organizationsCache: {} });
+        }
+      },
 
       setSidebarOpen: (sidebarOpen) => set({ sidebarOpen }),
       setPushNotificationPromptDismissed: (pushNotificationPromptDismissed) => 

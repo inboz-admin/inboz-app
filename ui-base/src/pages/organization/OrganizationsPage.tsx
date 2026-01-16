@@ -45,6 +45,7 @@ import {
 } from "@/components/common";
 import { exportToCSVWithAudit } from "@/utils/csvExport";
 import { NoDataState } from "@/components/common/NoDataState";
+import { useOrganizationTimezone } from "@/hooks/useOrganizationTimezone";
 
 export function OrganizationsPage() {
   const [sorting, setSorting] = useState<SortingState>([]);
@@ -79,6 +80,9 @@ export function OrganizationsPage() {
   // Get user data from store
   const { user, selectedOrganizationId } = useAppStore();
   const isEmployee = user?.type === 'employee';
+  
+  // Get organization timezone
+  const timezone = useOrganizationTimezone();
 
   // Debounce search term to prevent excessive API calls
   useEffect(() => {
@@ -398,11 +402,13 @@ export function OrganizationsPage() {
         canPerformAction,
         onViewOrganization: handleViewOrganization,
         onEditOrganization: handleEditOrganization,
+        timezone,
         onDeleteOrganization: () => {}, // Disabled delete functionality
         onManageSubscription: isSuperAdmin ? handleManageSubscription : undefined,
         isSuperAdmin,
+        timezone,
       }),
-    [canPerformAction, isSuperAdmin]
+    [canPerformAction, isSuperAdmin, timezone]
   );
 
   // Table instance

@@ -76,6 +76,7 @@ import { useAppStore } from "@/stores/appStore";
 import { createAuditLogColumns } from "./columns";
 import { exportToCSVWithAudit } from "@/utils/csvExport";
 import { NoDataState } from "@/components/common/NoDataState";
+import { useOrganizationTimezone } from "@/hooks/useOrganizationTimezone";
 
 export default function AuditLogsPage() {
   const [sorting, setSorting] = useState<SortingState>([]);
@@ -101,6 +102,9 @@ export default function AuditLogsPage() {
 
   // Get user data from store
   const { user } = useAppStore();
+  
+  // Get organization timezone
+  const timezone = useOrganizationTimezone();
 
   // Fetch audit logs data on component mount and when pagination/filters change
   useEffect(() => {
@@ -262,8 +266,9 @@ export default function AuditLogsPage() {
       createAuditLogColumns({
         canPerformAction,
         onViewAuditLog: handleViewAuditLog,
+        timezone,
       }),
-    [canPerformAction]
+    [canPerformAction, timezone]
   );
 
   // Filter audit logs based on search term and filters

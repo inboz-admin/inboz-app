@@ -15,6 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import type { ContactList } from "@/api/contactListTypes";
 import { ContactListType } from "@/api/contactListTypes";
 import { ActionType } from "@/api/roleTypes";
+import { formatDateTime } from "@/utils/dateFormat";
 
 interface ContactListColumnsProps {
   canPerformAction: (action: ActionType) => boolean;
@@ -22,6 +23,7 @@ interface ContactListColumnsProps {
   onEditList: (list: ContactList) => void;
   onDeleteList: (list: ContactList) => void;
   onManageContacts: (list: ContactList) => void;
+  timezone?: string; // Organization timezone
 }
 
 export const createContactListColumns = ({
@@ -29,6 +31,7 @@ export const createContactListColumns = ({
   onViewList,
   onEditList,
   onDeleteList,
+  timezone = 'UTC',
   onManageContacts,
 }: ContactListColumnsProps): ColumnDef<ContactList>[] => [
   {
@@ -126,8 +129,12 @@ export const createContactListColumns = ({
       );
     },
     cell: ({ row }) => {
-      const date = new Date(row.getValue("createdAt"));
-      return <div className="text-sm">{date.toLocaleDateString()}</div>;
+      const dateValue = row.getValue("createdAt") as string;
+      return (
+        <div className="text-sm" title={`Created: ${formatDateTime(dateValue, timezone)} (${timezone})`}>
+          {formatDateTime(dateValue, timezone)}
+        </div>
+      );
     },
     size: 110,
     maxSize: 110,

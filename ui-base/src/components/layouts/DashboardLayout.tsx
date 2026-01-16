@@ -23,6 +23,8 @@ import { useNotifications } from "@/hooks/useNotifications";
 import { useLocation, Outlet, Link, useParams } from "react-router-dom";
 import { useMemo } from "react";
 import { useAppStore } from "@/stores";
+import { useOrganizationTimezone } from "@/hooks/useOrganizationTimezone";
+import { Badge } from "@/components/ui/badge";
 
 // Navigation data for breadcrumb generation
 const navData = {
@@ -55,9 +57,27 @@ export default function DashboardLayout() {
   const location = useLocation();
   const { user } = useAppStore();
   const isEmployee = user?.type === "employee";
+  const timezone = useOrganizationTimezone();
   
   // Initialize notification WebSocket connection
   useNotifications();
+  
+  // Get timezone abbreviation for badge display
+  const getTimezoneAbbr = (tz: string): string => {
+    if (!tz || tz === 'UTC') return 'UTC';
+    try {
+      const now = new Date();
+      const formatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: tz,
+        timeZoneName: 'short'
+      });
+      return formatter.formatToParts(now).find(part => part.type === 'timeZoneName')?.value || tz;
+    } catch {
+      return tz;
+    }
+  };
+  
+  const tzAbbr = getTimezoneAbbr(timezone);
 
   // Generate dynamic breadcrumbs based on current path
   const breadcrumbs = useMemo((): BreadcrumbItem[] => {
@@ -165,6 +185,13 @@ export default function DashboardLayout() {
             </div>
             <div className="flex items-center gap-2 px-4">
               {isEmployee && <OrganizationSelector />}
+              <Badge 
+                variant="outline" 
+                className="px-2.5 py-1.5 text-xs font-normal"
+                title={timezone}
+              >
+                {tzAbbr}
+              </Badge>
               {/* Hide quota check for SUPERADMIN and SUPPORT */}
               {user?.role !== "SUPERADMIN" && user?.role !== "SUPPORT" && (
                 <>

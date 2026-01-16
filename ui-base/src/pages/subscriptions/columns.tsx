@@ -29,9 +29,10 @@ import {
 } from "@/api/subscriptionTypes";
 import { ActionType } from "@/api/roleTypes";
 import { toast } from "sonner";
+import { formatDateOnly, formatDateTime } from "@/utils/dateFormat";
 
 // Table cell viewer component
-const TableCellViewer = ({ value, type }: { value: unknown; type: string }) => {
+const TableCellViewer = ({ value, type, timezone }: { value: unknown; type: string; timezone: string }) => {
   if (value === null || value === undefined) {
     return <span className="text-muted-foreground">-</span>;
   }
@@ -40,7 +41,7 @@ const TableCellViewer = ({ value, type }: { value: unknown; type: string }) => {
     case "date":
       return (
         <span className="text-sm">
-          {new Date(value as string).toLocaleDateString()}
+          {formatDateOnly(value as string, timezone)}
         </span>
       );
     case "status": {
@@ -70,6 +71,7 @@ interface SubscriptionColumnsProps {
   onDeleteSubscription: (subscription: Subscription) => void;
   onViewInvoices?: (subscription: Subscription) => void;
   onToggleStatus?: (subscription: Subscription) => void;
+  timezone?: string; // Organization timezone
 }
 
 export const createSubscriptionColumns = ({
@@ -79,6 +81,7 @@ export const createSubscriptionColumns = ({
   onDeleteSubscription,
   onViewInvoices,
   onToggleStatus,
+  timezone = 'UTC',
 }: SubscriptionColumnsProps): ColumnDef<Subscription>[] => [
   {
     accessorKey: "plan.name",
@@ -120,7 +123,7 @@ export const createSubscriptionColumns = ({
     },
     cell: ({ row }) => (
       <div className="text-left">
-        <TableCellViewer value={row.getValue("status")} type="status" />
+        <TableCellViewer value={row.getValue("status")} type="status" timezone={timezone} />
       </div>
     ),
     size: 120,
@@ -177,6 +180,7 @@ export const createSubscriptionColumns = ({
         <TableCellViewer
           value={row.getValue("currentPeriodStart")}
           type="date"
+          timezone={timezone}
         />
       </div>
     ),
@@ -188,7 +192,7 @@ export const createSubscriptionColumns = ({
     header: "End Date",
     cell: ({ row }) => (
       <div className="text-left">
-        <TableCellViewer value={row.getValue("currentPeriodEnd")} type="date" />
+        <TableCellViewer value={row.getValue("currentPeriodEnd")} type="date" timezone={timezone} />
       </div>
     ),
     size: 110,
@@ -204,7 +208,7 @@ export const createSubscriptionColumns = ({
         return (
           <div className="text-left">
             <div className="text-sm text-orange-600">
-              {new Date(cancelAt).toLocaleDateString()}
+              {formatDateOnly(cancelAt, timezone)}
             </div>
             <div className="text-xs text-muted-foreground">Active until</div>
           </div>
@@ -230,8 +234,12 @@ export const createSubscriptionColumns = ({
       );
     },
     cell: ({ row }) => {
-      const date = new Date(row.getValue("createdAt"));
-      return <div className="text-left">{date.toLocaleDateString()}</div>;
+      const dateValue = row.getValue("createdAt") as string;
+      return (
+        <div className="text-left" title={`Created: ${formatDateTime(dateValue, timezone)} (${timezone})`}>
+          {formatDateTime(dateValue, timezone)}
+        </div>
+      );
     },
     size: 110,
     maxSize: 110,

@@ -43,6 +43,7 @@ import { createSubscriptionColumns } from "./columns";
 import { NoDataState } from "@/components/common/NoDataState";
 import { CancelSubscriptionDialog } from "@/components/payments";
 import { useNavigate } from "react-router-dom";
+import { useOrganizationTimezone } from "@/hooks/useOrganizationTimezone";
 
 export default function SubscriptionsPage() {
   const navigate = useNavigate();
@@ -70,6 +71,9 @@ export default function SubscriptionsPage() {
 
   // Get user data from store
   const { user, selectedOrganizationId } = useAppStore();
+  
+  // Get organization timezone
+  const timezone = useOrganizationTimezone();
 
   // Debounce search term
   useEffect(() => {
@@ -348,8 +352,9 @@ export default function SubscriptionsPage() {
         onDeleteSubscription: handleDeleteClick,
         onViewInvoices: handleViewInvoices,
         onToggleStatus: handleToggleStatus,
+        timezone,
       }),
-    [canPerformAction]
+    [canPerformAction, timezone]
   );
 
   const table = useReactTable({

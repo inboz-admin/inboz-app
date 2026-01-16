@@ -29,6 +29,7 @@ import {
 } from "@/api/contactTypes";
 import { ActionType } from "@/api/roleTypes";
 import { toast } from "sonner";
+import { formatDateTime } from "@/utils/dateFormat";
 
 // Table cell viewer component
 const TableCellViewer = ({ value, type }: { value: unknown; type: string }) => {
@@ -55,6 +56,7 @@ interface ContactColumnsProps {
   onViewContact: (contact: Contact) => void;
   onEditContact: (contact: Contact) => void;
   onDeleteContact: (contact: Contact) => void;
+  timezone?: string; // Organization timezone
 }
 
 export const createContactColumns = ({
@@ -62,6 +64,7 @@ export const createContactColumns = ({
   onViewContact,
   onEditContact,
   onDeleteContact,
+  timezone = 'UTC',
 }: ContactColumnsProps): ColumnDef<Contact>[] => [
   {
     id: "select",
@@ -195,8 +198,12 @@ export const createContactColumns = ({
       );
     },
     cell: ({ row }) => {
-      const date = new Date(row.getValue("createdAt"));
-      return <div className="text-sm">{date.toLocaleDateString()}</div>;
+      const dateValue = row.getValue("createdAt") as string;
+      return (
+        <div className="text-sm" title={`Created: ${formatDateTime(dateValue, timezone)} (${timezone})`}>
+          {formatDateTime(dateValue, timezone)}
+        </div>
+      );
     },
     size: 110,
     maxSize: 110,

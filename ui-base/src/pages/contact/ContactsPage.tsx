@@ -42,6 +42,7 @@ import ExcelUploadModal from "@/components/ExcelUploadModal";
 import AddToListModal from "./AddToListModal";
 import { useAppStore } from "@/stores/appStore";
 import { createContactColumns } from "./columns";
+import { useOrganizationTimezone } from "@/hooks/useOrganizationTimezone";
 import { exportToCSVWithAudit } from "@/utils/csvExport";
 import { NoDataState } from "@/components/common/NoDataState";
 import { useSelectionSession } from "@/hooks/useSelectionSession";
@@ -75,6 +76,9 @@ export default function ContactsPage() {
 
   // Get user data from store
   const { user, selectedOrganizationId } = useAppStore();
+  
+  // Get organization timezone
+  const timezone = useOrganizationTimezone();
 
   // Global selection store (for regular contact operations)
   const {
@@ -485,8 +489,9 @@ export default function ContactsPage() {
         onViewContact: handleViewContact,
         onEditContact: handleEditContact,
         onDeleteContact: handleDeleteClick,
+        timezone,
       }),
-    [canPerformAction]
+    [canPerformAction, timezone]
   );
 
   const table = useReactTable({

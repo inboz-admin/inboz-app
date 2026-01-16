@@ -30,6 +30,7 @@ import EmailTemplateModal from "./EmailTemplateModal";
 import { useNavigate } from "react-router-dom";
 import { useAppStore } from "@/stores/appStore";
 import { createEmailTemplateColumns } from "./columns";
+import { useOrganizationTimezone } from "@/hooks/useOrganizationTimezone";
 import { NoDataState } from "@/components/common/NoDataState";
 import {
   Select,
@@ -132,6 +133,9 @@ export default function EmailTemplatesPage() {
     };
   }, [moduleActions]);
 
+  // Get organization timezone
+  const timezone = useOrganizationTimezone();
+
   const columns = useMemo(
     () => createEmailTemplateColumns({
       onView: (template: EmailTemplate) => {
@@ -149,8 +153,9 @@ export default function EmailTemplatesPage() {
         setIsDeleteDialogOpen(true);
       },
       canPerformAction,
-    }),
-    [canPerformAction]
+      timezone,
+    }, timezone),
+    [canPerformAction, timezone]
   );
 
   const table = useReactTable({

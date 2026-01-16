@@ -29,9 +29,10 @@ import {
 } from "@/api/organizationTypes";
 import { ActionType } from "@/api/roleTypes";
 import { toast } from "sonner";
+import { formatDateTime } from "@/utils/dateFormat";
 
 // Table cell viewer component
-const TableCellViewer = ({ value, type }: { value: unknown; type: string }) => {
+const TableCellViewer = ({ value, type, timezone }: { value: unknown; type: string; timezone: string }) => {
   if (value === null || value === undefined) {
     return <span className="text-muted-foreground">-</span>;
   }
@@ -40,7 +41,7 @@ const TableCellViewer = ({ value, type }: { value: unknown; type: string }) => {
     case "date":
       return (
         <span className="text-sm">
-          {new Date(value as string).toLocaleDateString()}
+          {formatDateOnly(value as string, timezone)}
         </span>
       );
     case "email":
@@ -68,6 +69,7 @@ interface OrganizationColumnsProps {
   onDeleteOrganization: (organization: Organization) => void;
   onManageSubscription?: (organization: Organization) => void;
   isSuperAdmin?: boolean;
+  timezone?: string; // Organization timezone
 }
 
 export const createOrganizationColumns = ({
@@ -77,6 +79,7 @@ export const createOrganizationColumns = ({
   onDeleteOrganization,
   onManageSubscription,
   isSuperAdmin = false,
+  timezone = 'UTC',
 }: OrganizationColumnsProps): ColumnDef<Organization>[] => [
   {
     id: "select",
@@ -161,7 +164,7 @@ export const createOrganizationColumns = ({
       );
     },
     cell: ({ row }) => (
-      <TableCellViewer value={row.getValue("status")} type="status" />
+      <TableCellViewer value={row.getValue("status")} type="status" timezone={timezone} />
     ),
     size: 100,
     maxSize: 100,
@@ -209,8 +212,12 @@ export const createOrganizationColumns = ({
       );
     },
     cell: ({ row }) => {
-      const date = new Date(row.getValue("createdAt"));
-      return <div className="text-sm">{date.toLocaleDateString()}</div>;
+      const dateValue = row.getValue("createdAt") as string;
+      return (
+        <div className="text-sm" title={`Created: ${formatDateTime(dateValue, timezone)} (${timezone})`}>
+          {formatDateTime(dateValue, timezone)}
+        </div>
+      );
     },
     size: 110,
     maxSize: 110,

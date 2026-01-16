@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
-import { DateTime } from 'luxon';
+import { formatDateTime } from '@/utils/dateFormat';
+import { useOrganizationTimezone } from '@/hooks/useOrganizationTimezone';
 import { CampaignsApi } from '../../api/campaigns';
 import type { Campaign } from '../../api/campaigns';
 import { Button } from '../../components/ui/button';
@@ -30,6 +31,9 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 
 export function CampaignListPage() {
   const [items, setItems] = useState<Campaign[]>([]);
+  
+  // Get organization timezone
+  const timezone = useOrganizationTimezone();
   const [loading, setLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [editId, setEditId] = useState<string | undefined>(undefined);
@@ -466,6 +470,7 @@ export function CampaignListPage() {
                     navigate={navigate}
                     onDelete={handleDeleteClick}
                     canPerformAction={canPerformAction}
+                    timezone={timezone}
                   />
                 ))}
               </TableBody>
@@ -623,13 +628,15 @@ function CampaignRow({
   onToggleActive,
   navigate,
   onDelete,
-  canPerformAction
+  canPerformAction,
+  timezone
 }: { 
   campaign: Campaign; 
   onToggleActive: (c: Campaign, checked: boolean) => void;
   navigate: (path: string) => void;
   onDelete: (campaign: Campaign) => void;
   canPerformAction: (action: ActionType) => boolean;
+  timezone: string;
 }) {
   // Enable real-time progress for active campaigns
   const isActive = campaign.status === 'ACTIVE';
@@ -695,22 +702,20 @@ function CampaignRow({
       </TableCell>
       <TableCell className="text-left py-1 px-2">
         {(() => {
-          const createdAt = (campaign as any).createdAt;
-          if (!createdAt) return <span className="text-sm text-muted-foreground">-</span>;
+          const createdAt = campaign.createdAt;
+          if (!createdAt) {
+            return <span className="text-sm text-muted-foreground" title="Creation date not available">-</span>;
+          }
           
           try {
-            const dateTime = DateTime.fromISO(createdAt);
-            if (!dateTime.isValid) {
-              return <span className="text-sm text-muted-foreground">-</span>;
-            }
-            
-            // Format date and time on a single line using Luxon
-            const formatted = dateTime.toFormat('MMM dd, yyyy hh:mm a');
-            
+            const formatted = formatDateTime(createdAt, timezone);
             return (
-              <span className="text-sm">{formatted}</span>
+              <span className="text-sm" title={`Created: ${formatted} (${timezone})`}>
+                {formatted}
+              </span>
             );
-          } catch {
+          } catch (error) {
+            console.error('Error formatting campaign created date:', error, createdAt);
             return <span className="text-sm text-muted-foreground">-</span>;
           }
         })()}

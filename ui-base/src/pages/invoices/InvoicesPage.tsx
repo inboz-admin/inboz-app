@@ -38,6 +38,7 @@ import { toast } from "sonner";
 import { useAppStore } from "@/stores/appStore";
 import { createInvoiceColumns } from "./columns";
 import { NoDataState } from "@/components/common/NoDataState";
+import { useOrganizationTimezone } from "@/hooks/useOrganizationTimezone";
 
 export default function InvoicesPage() {
   const [sorting, setSorting] = useState<SortingState>([]);
@@ -60,6 +61,9 @@ export default function InvoicesPage() {
 
   // Get user data from store
   const { user, selectedOrganizationId } = useAppStore();
+  
+  // Get organization timezone
+  const timezone = useOrganizationTimezone();
 
   // Debounce search term
   useEffect(() => {
@@ -271,8 +275,9 @@ export default function InvoicesPage() {
         canPerformAction,
         onDownloadInvoice: handleDownloadInvoice,
         onPayInvoice: handlePayInvoice,
+        timezone,
       }),
-    [canPerformAction]
+    [canPerformAction, timezone]
   );
 
   const table = useReactTable({

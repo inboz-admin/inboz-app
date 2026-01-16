@@ -27,9 +27,10 @@ import {
 import { ActionType } from "@/api/roleTypes";
 import { toast } from "sonner";
 import { invoiceService } from "@/api/invoiceService";
+import { formatDateTime } from "@/utils/dateFormat";
 
 // Table cell viewer component
-const TableCellViewer = ({ value, type }: { value: unknown; type: string }) => {
+const TableCellViewer = ({ value, type, timezone }: { value: unknown; type: string; timezone: string }) => {
   if (value === null || value === undefined) {
     return <span className="text-muted-foreground">-</span>;
   }
@@ -38,7 +39,7 @@ const TableCellViewer = ({ value, type }: { value: unknown; type: string }) => {
     case "date":
       return (
         <span className="text-sm">
-          {new Date(value as string).toLocaleDateString()}
+          {formatDateOnly(value as string, timezone)}
         </span>
       );
     case "status": {
@@ -65,12 +66,14 @@ interface InvoiceColumnsProps {
   canPerformAction: (action: ActionType) => boolean;
   onDownloadInvoice: (invoice: Invoice) => void;
   onPayInvoice?: (invoice: Invoice) => void;
+  timezone?: string; // Organization timezone
 }
 
 export const createInvoiceColumns = ({
   canPerformAction,
   onDownloadInvoice,
   onPayInvoice,
+  timezone = 'UTC',
 }: InvoiceColumnsProps): ColumnDef<Invoice>[] => [
   {
     accessorKey: "invoiceNumber",
@@ -111,7 +114,7 @@ export const createInvoiceColumns = ({
     cell: ({ row }) => {
       return (
         <div className="text-left">
-          <TableCellViewer value={row.getValue("status")} type="status" />
+          <TableCellViewer value={row.getValue("status")} type="status" timezone={timezone} />
         </div>
       );
     },
@@ -155,8 +158,12 @@ export const createInvoiceColumns = ({
       );
     },
     cell: ({ row }) => {
-      const date = new Date(row.getValue("createdAt"));
-      return <div className="text-left">{date.toLocaleDateString()}</div>;
+      const dateValue = row.getValue("createdAt") as string;
+      return (
+        <div className="text-left" title={`Created: ${formatDateTime(dateValue, timezone)} (${timezone})`}>
+          {formatDateTime(dateValue, timezone)}
+        </div>
+      );
     },
     size: 110,
     maxSize: 110,

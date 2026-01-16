@@ -31,6 +31,7 @@ import {
 } from "@/api/userTypes";
 import { ActionType } from "@/api/roleTypes";
 import { toast } from "sonner";
+import { formatDateTime } from "@/utils/dateFormat";
 
 // Table cell viewer component
 const TableCellViewer = ({ value, type }: { value: unknown; type: string }) => {
@@ -63,6 +64,7 @@ interface UserColumnsProps {
   onDeleteUser: (user: User) => void;
   onViewQuotaUsage?: (user: User) => void;
   canViewQuotaUsage?: boolean;
+  timezone?: string; // Organization timezone
 }
 
 export const createUserColumns = ({
@@ -72,6 +74,7 @@ export const createUserColumns = ({
   onDeleteUser,
   onViewQuotaUsage,
   canViewQuotaUsage = false,
+  timezone = 'UTC',
 }: UserColumnsProps): ColumnDef<User>[] => [
   {
     id: "select",
@@ -206,8 +209,12 @@ export const createUserColumns = ({
       );
     },
     cell: ({ row }) => {
-      const date = new Date(row.getValue("createdAt"));
-      return <div className="text-sm">{date.toLocaleDateString()}</div>;
+      const dateValue = row.getValue("createdAt") as string;
+      return (
+        <div className="text-sm" title={`Created: ${formatDateTime(dateValue, timezone)} (${timezone})`}>
+          {formatDateTime(dateValue, timezone)}
+        </div>
+      );
     },
     size: 110,
     maxSize: 110,

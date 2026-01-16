@@ -12,16 +12,19 @@ import {
 import { Badge } from "@/components/ui/badge";
 import type { EmailTemplate } from "@/api/emailTemplateTypes";
 import { ActionType } from "@/api/roleTypes";
+import { formatDateTime } from "@/utils/dateFormat";
 
 interface EmailTemplateActions {
   onView: (template: EmailTemplate) => void;
   onEdit: (template: EmailTemplate) => void;
   onDelete: (template: EmailTemplate) => void;
   canPerformAction: (action: ActionType) => boolean;
+  timezone?: string; // Organization timezone
 }
 
 export const createEmailTemplateColumns = (
-  actions: EmailTemplateActions
+  actions: EmailTemplateActions,
+  timezone: string = 'UTC'
 ): ColumnDef<EmailTemplate>[] => [
   // Helper: format name to Title Case for display
   // Note: display-only; does not mutate stored value
@@ -96,12 +99,12 @@ export const createEmailTemplateColumns = (
     cell: ({ row }) => {
       const createdAt = row.getValue("createdAt") as string;
       return (
-        <span className="text-sm text-muted-foreground">
-          {new Date(createdAt).toLocaleDateString()}
+        <span className="text-sm text-muted-foreground" title={`Created: ${formatDateTime(createdAt, timezone)} (${timezone})`}>
+          {formatDateTime(createdAt, timezone)}
         </span>
       );
     },
-    size: 110,
+    size: 150,
   },
   {
     id: "actions",

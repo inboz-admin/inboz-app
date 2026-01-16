@@ -32,9 +32,10 @@ import {
 } from "@/api/auditTypes";
 import { ActionType } from "@/api/roleTypes";
 import { toast } from "sonner";
+import { formatDateIntl, formatDateTime } from "@/utils/dateFormat";
 
 // Table cell viewer component
-const TableCellViewer = ({ value, type }: { value: unknown; type: string }) => {
+const TableCellViewer = ({ value, type, timezone }: { value: unknown; type: string; timezone: string }) => {
   switch (type) {
     case "action":
       const action = value as string;
@@ -63,8 +64,8 @@ const TableCellViewer = ({ value, type }: { value: unknown; type: string }) => {
       return (
         <div className="flex items-center gap-2">
           <Calendar className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-          <span className="text-sm">
-            {new Date(value as string).toLocaleString()}
+          <span className="text-sm" title={`${formatDateTime(value as string, timezone)} (${timezone})`}>
+            {formatDateTime(value as string, timezone)}
           </span>
         </div>
       );
@@ -73,7 +74,11 @@ const TableCellViewer = ({ value, type }: { value: unknown; type: string }) => {
         <div className="flex items-center gap-2">
           <Calendar className="h-4 w-4 text-muted-foreground flex-shrink-0" />
           <span className="text-sm">
-            {new Date(value as string).toLocaleTimeString()}
+            {formatDateIntl(value as string, timezone, {
+              hour: '2-digit',
+              minute: '2-digit',
+              second: '2-digit',
+            })}
           </span>
         </div>
       );
@@ -103,11 +108,13 @@ const TableCellViewer = ({ value, type }: { value: unknown; type: string }) => {
 interface AuditLogColumnsProps {
   canPerformAction: (action: ActionType) => boolean;
   onViewAuditLog: (auditLog: AuditLog) => void;
+  timezone?: string; // Organization timezone
 }
 
 export const createAuditLogColumns = ({
   canPerformAction,
   onViewAuditLog,
+  timezone = 'UTC',
 }: AuditLogColumnsProps): ColumnDef<AuditLog>[] => [
   {
     id: "select",
@@ -153,7 +160,7 @@ export const createAuditLogColumns = ({
     },
     cell: ({ row }) => (
       <div className="text-left min-w-[120px]">
-        <TableCellViewer value={row.getValue("action")} type="action" />
+        <TableCellViewer value={row.getValue("action")} type="action" timezone={timezone} />
       </div>
     ),
   },
@@ -173,7 +180,7 @@ export const createAuditLogColumns = ({
     },
     cell: ({ row }) => (
       <div className="text-left min-w-[120px]">
-        <TableCellViewer value={row.getValue("module")} type="module" />
+        <TableCellViewer value={row.getValue("module")} type="module" timezone={timezone} />
       </div>
     ),
   },
@@ -185,7 +192,7 @@ export const createAuditLogColumns = ({
       const userName = user?.name || user?.email || "System";
       return (
         <div className="text-left min-w-[150px]">
-          <TableCellViewer value={userName} type="employee" />
+          <TableCellViewer value={userName} type="employee" timezone={timezone} />
         </div>
       );
     },
@@ -221,8 +228,8 @@ export const createAuditLogColumns = ({
     cell: ({ row }) => {
       const timestamp = row.getValue("eventTimestamp") as string;
       return (
-        <div className="text-left min-w-[120px]">
-          <TableCellViewer value={timestamp} type="date" />
+        <div className="text-left min-w-[120px]" title={`Date: ${formatDateTime(timestamp, timezone)} (${timezone})`}>
+          {formatDateTime(timestamp, timezone)}
         </div>
       );
     },

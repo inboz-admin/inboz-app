@@ -37,6 +37,7 @@ import ContactListModal from "./ContactListModal";
 import { useNavigate } from "react-router-dom";
 import { useAppStore } from "@/stores/appStore";
 import { createContactListColumns } from "./columns";
+import { useOrganizationTimezone } from "@/hooks/useOrganizationTimezone";
 import { NoDataState } from "@/components/common/NoDataState";
 
 export default function ContactListsPage() {
@@ -66,6 +67,9 @@ export default function ContactListsPage() {
 
   // Get user data from store
   const { user, selectedOrganizationId } = useAppStore();
+  
+  // Get organization timezone
+  const timezone = useOrganizationTimezone();
 
   // Debounce search term
   useEffect(() => {
@@ -270,8 +274,9 @@ export default function ContactListsPage() {
         onEditList: handleEditList,
         onDeleteList: handleDeleteClick,
         onManageContacts: handleViewList,
+        timezone,
       }),
-    [canPerformAction]
+    [canPerformAction, timezone]
   );
 
   const table = useReactTable({

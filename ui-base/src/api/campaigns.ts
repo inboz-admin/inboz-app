@@ -19,6 +19,8 @@ export type Campaign = {
   complianceChecked?: boolean;
   complianceNotes?: string;
   completedAt?: string | null;
+  createdAt?: string; // Campaign creation timestamp
+  updatedAt?: string; // Campaign update timestamp
   sequenceSettings?: any;
   // analytics (readonly)
   totalRecipients: number;
