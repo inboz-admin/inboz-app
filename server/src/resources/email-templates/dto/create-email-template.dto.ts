@@ -39,6 +39,10 @@ export class CreateEmailTemplateDto {
 
   @IsOptional()
   @IsString()
+  plainText?: string;
+
+  @IsOptional()
+  @IsString()
   @Length(1, 100)
   category?: string;
 

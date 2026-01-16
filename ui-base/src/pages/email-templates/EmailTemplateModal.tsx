@@ -43,6 +43,7 @@ const emailTemplateSchema = z.object({
   subject: z.string().min(1, "Subject is required"),
   htmlContent: z.string().optional(),
   textContent: z.string().optional(),
+  plainText: z.string().optional(),
 }).refine(
   (data) => data.htmlContent || data.textContent,
   {
@@ -250,6 +251,7 @@ export default function EmailTemplateModal({
       subject: "",
       htmlContent: "",
       textContent: "",
+      plainText: "",
     },
   });
 
@@ -299,6 +301,7 @@ export default function EmailTemplateModal({
         subject: template?.subject || "",
         htmlContent: htmlContent,
         textContent: textContent,
+        plainText: template?.plainText || "",
       });
       
       setSelectedSystemTemplateId(null);
@@ -335,6 +338,7 @@ export default function EmailTemplateModal({
         subject: "",
         htmlContent: "",
         textContent: "",
+        plainText: "",
       });
       setSelectedSystemTemplateId(null);
       setUserManuallySetHtml(false);
@@ -447,39 +451,40 @@ export default function EmailTemplateModal({
     try {
       let finalHtmlContent = data.htmlContent;
       let finalTextContent = data.textContent;
+      let finalPlainText = data.plainText;
       
       // If builder was used, convert builder data to HTML and save both
       if (useBuilder && builderData) {
         finalHtmlContent = builderToHtml(builderData);
         finalTextContent = convertHtmlToText(finalHtmlContent);
+        finalPlainText = convertHtmlToText(finalHtmlContent);
       } else if (data.sendFormat === EmailSendFormat.TEXT) {
-        // If TEXT format is selected, convert text to HTML and save in textContent
-        // HTML content is preserved in htmlContent (for predefined templates)
-        // Keep htmlContent as is (from predefined template or TipTap)
-        finalHtmlContent = data.htmlContent || undefined;
+        // For TEXT format:
+        // - textContent: TipTap HTML conversion (for sending with links)
+        // - plainText: Plain text with line breaks (for preview)
+        // - htmlContent: Only saved once from system templates (preserve if exists, don't overwrite)
         
-        // Convert textContent to HTML with links and save in textContent
-        if (data.textContent) {
-          // Check if textContent already contains HTML tags
-          const hasHtmlTags = /<[a-z][\s\S]*>/i.test(data.textContent);
-          
-          if (hasHtmlTags) {
-            // Already HTML (from TipTap), use as is
-            finalTextContent = data.textContent;
-          } else {
-            // Plain text, convert to HTML with links
-            finalTextContent = convertTextToHtml(data.textContent);
-          }
-        } else if (data.htmlContent) {
-          // If no textContent but htmlContent exists, use htmlContent for textContent too
-          finalTextContent = data.htmlContent;
+        // textContent: TipTap HTML (already set from onChange handler)
+        finalTextContent = data.textContent || undefined;
+        
+        // plainText: Plain text with line breaks (already set from onChange handler)
+        finalPlainText = data.plainText || undefined;
+        
+        // htmlContent: Only preserve if it came from system templates (don't overwrite)
+        // Keep existing htmlContent if template exists and has it, otherwise undefined
+        if (template?.htmlContent) {
+          finalHtmlContent = template.htmlContent; // Preserve existing from system template
+        } else {
+          finalHtmlContent = undefined; // Don't save TipTap HTML here
         }
       } else if (data.sendFormat === EmailSendFormat.HTML && data.htmlContent) {
-        // For HTML format, save HTML in htmlContent and generate textContent fallback
+        // For HTML format:
+        // - textContent: null
+        // - plainText: null
+        // - htmlContent: Actual HTML content
         finalHtmlContent = data.htmlContent;
-        if (!finalTextContent) {
-          finalTextContent = convertHtmlToText(data.htmlContent);
-        }
+        finalTextContent = undefined;
+        finalPlainText = undefined;
       }
 
       // Prepare designSettings if builder was used
@@ -491,6 +496,7 @@ export default function EmailTemplateModal({
           subject: data.subject,
           htmlContent: finalHtmlContent || undefined,
           textContent: finalTextContent || undefined,
+          plainText: finalPlainText || undefined,
           category: data.category,
           type: data.type,
           sendFormat: data.sendFormat,
@@ -504,6 +510,7 @@ export default function EmailTemplateModal({
           subject: data.subject,
           htmlContent: finalHtmlContent || undefined,
           textContent: finalTextContent || undefined,
+          plainText: finalPlainText || undefined,
           category: data.category,
           type: data.type,
           sendFormat: data.sendFormat,
@@ -518,8 +525,11 @@ export default function EmailTemplateModal({
         name: "",
         category: "",
         type: EmailTemplateType.PRIVATE,
+        sendFormat: EmailSendFormat.TEXT,
         subject: "",
         htmlContent: "",
+        textContent: "",
+        plainText: "",
       });
       
       onSuccess();
@@ -842,9 +852,12 @@ export default function EmailTemplateModal({
                       <TiptapEditor
                         value={watchedValues.textContent ? watchedValues.textContent.replace(/\n/g, '<br>') : ''}
                         onChange={(htmlContent) => {
-                          // For TEXT format, save the HTML from TipTap (which preserves links)
-                          // We'll convert it to HTML with links during save
-                          // Also save plain text version for fallback
+                          // For TEXT format:
+                          // - textContent: TipTap HTML conversion (for sending with links)
+                          // - plainText: Plain text with line breaks (for preview)
+                          // - htmlContent: Don't change (preserve if exists from system templates)
+                          
+                          // Convert TipTap HTML to plain text with line breaks
                           let plainText = htmlContent
                             .replace(/<a\s+[^>]*href=["']([^"']+)["'][^>]*>([^<]*)<\/a>/gi, (match, url, text) => {
                               const linkText = text.trim() || url;
@@ -863,10 +876,11 @@ export default function EmailTemplateModal({
                             .replace(/\n{3,}/g, '\n\n')
                             .trim();
                           
-                          // Save both: textContent for display, and htmlContent for later conversion
-                          setValue("textContent", plainText, { shouldDirty: true, shouldValidate: true });
-                          // Store the TipTap HTML output in htmlContent so we can preserve links
-                          setValue("htmlContent", htmlContent, { shouldDirty: true, shouldValidate: true });
+                          // textContent: TipTap HTML (for sending)
+                          setValue("textContent", htmlContent, { shouldDirty: true, shouldValidate: true });
+                          // plainText: Plain text with line breaks (for preview)
+                          setValue("plainText", plainText, { shouldDirty: true, shouldValidate: true });
+                          // htmlContent: Don't change (preserve if exists from system templates)
                         }}
                         placeholder="Enter plain text content here. URLs will be automatically converted to links..."
                         disabled={isViewMode}
@@ -931,8 +945,30 @@ export default function EmailTemplateModal({
                         {watchedValues.sendFormat === EmailSendFormat.HTML && watchedValues.htmlContent ? (
                           /* HTML format - render HTML content */
                           <EmailPreviewContent htmlContent={replaceVariables(watchedValues.htmlContent || '')} />
+                        ) : watchedValues.sendFormat === EmailSendFormat.TEXT ? (
+                          /* Text format - show plain text preview with line breaks */
+                          (() => {
+                            // Get plain text content - prefer plainText (with line breaks), fallback to textContent or converted htmlContent
+                            let plainText = watchedValues.plainText || watchedValues.textContent || '';
+                            if (!plainText && watchedValues.htmlContent) {
+                              // Convert HTML to plain text for preview
+                              plainText = convertHtmlToText(watchedValues.htmlContent);
+                            }
+                            return (
+                              <div
+                                className="text-foreground text-xs"
+                                style={{
+                                  whiteSpace: 'pre-wrap',
+                                  fontFamily: 'Inter, sans-serif',
+                                  lineHeight: '1.6',
+                                }}
+                              >
+                                {plainText ? replaceVariables(plainText) : <span className="text-muted-foreground italic">No content</span>}
+                              </div>
+                            );
+                          })()
                         ) : watchedValues.textContent ? (
-                          /* Text format - show plain text preview */
+                          /* Fallback: show text content if available */
                           <div
                             className="text-foreground text-xs"
                             style={{

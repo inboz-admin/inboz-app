@@ -70,6 +70,13 @@ export class EmailTemplate extends BaseEntity {
   textContent: string;
 
   @Column({
+    type: DataType.TEXT('long'),
+    allowNull: true,
+    field: 'plain_text',
+  })
+  plainText: string;
+
+  @Column({
     type: DataType.STRING(100),
     allowNull: true,
   })

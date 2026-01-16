@@ -17,6 +17,7 @@ export interface EmailTemplate {
   subject: string;
   htmlContent?: string;
   textContent?: string;
+  plainText?: string;
   category?: string;
   tags?: string[];
   type: EmailTemplateType;
@@ -45,6 +46,7 @@ export interface CreateEmailTemplateDto {
   subject: string;
   htmlContent?: string;
   textContent?: string;
+  plainText?: string;
   category?: string;
   tags?: string[];
   type?: EmailTemplateType;
@@ -59,6 +61,7 @@ export interface UpdateEmailTemplateDto {
   subject?: string;
   htmlContent?: string;
   textContent?: string;
+  plainText?: string;
   category?: string;
   tags?: string[];
   type?: EmailTemplateType;
