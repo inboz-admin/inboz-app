@@ -89,11 +89,14 @@ export function CampaignBuilderPage() {
   const [stepQueuedEmails, setStepQueuedEmails] = useState<Record<string, Array<{ scheduledSendAt?: string | null }>>>({});
   const { id } = useParams();
   const navigate = useNavigate();
-  const { user } = useAppStore();
+  const { user, selectedOrganizationId } = useAppStore();
   const [searchParams] = useSearchParams();
   const isViewMode = searchParams.get('view') === 'true';
+  const isEmployee = user?.type === 'employee';
 
-  const effectiveOrgId = campaign.organizationId || user?.organizationId || '';
+  // For employees: use selectedOrganizationId from store (can be null - apiService handles it)
+  // For regular users: use organizationId from user object
+  const effectiveOrgId = campaign.organizationId || (isEmployee ? selectedOrganizationId : user?.organizationId) || '';
   const canSave = useMemo(() => !!effectiveOrgId && !!campaign?.name && !!(campaign as any).contactListId, [effectiveOrgId, campaign]);
 
   // Enable real-time progress for active campaigns
@@ -129,7 +132,10 @@ export function CampaignBuilderPage() {
 
   // Function to load campaign data
   const loadCampaign = useCallback(() => {
-    if (!id || !user?.organizationId) return;
+    if (!id) return;
+    // For employees: don't require organizationId (apiService will handle it)
+    // For regular users: require organizationId from user object
+    if (!isEmployee && !user?.organizationId) return;
     CampaignsApi.get(id)
       .then((c) => {
         if (c) {
@@ -161,31 +167,52 @@ export function CampaignBuilderPage() {
         console.error('Failed to load campaign:', err);
         // Don't show error toast on polling, only on initial load
       });
-  }, [id, user?.organizationId]);
+  }, [id, user?.organizationId, isEmployee]);
 
   // Load options & existing campaign if editing
   useEffect(() => {
-    const orgId = user?.organizationId;
-    if (orgId) {
-      emailTemplateService.getTemplates({ organizationId: orgId, page: 1, limit: 100 }).then((r: any) => {
+    // For employees: use selectedOrganizationId from store (can be null - apiService handles it)
+    // For regular users: use organizationId from user object
+    const orgId = isEmployee ? selectedOrganizationId : user?.organizationId;
+    
+    // Load templates and contact lists if we have an organizationId
+    // For employees, apiService will automatically add organizationId from store
+    if (orgId || isEmployee) {
+      const templateParams = isEmployee 
+        ? { page: 1, limit: 100 } 
+        : { organizationId: orgId || undefined, page: 1, limit: 100 };
+      emailTemplateService.getTemplates(templateParams).then((r: any) => {
         const arr = (r?.data ?? []) as any[];
         setTemplates(arr.map((t: any) => ({ id: t.id, name: t.name })));
       }).catch(() => setTemplates([]));
-      contactListService.getContactLists({ organizationId: orgId, page: 1, limit: 100 }).then((r: any) => {
+      
+      const listParams = isEmployee 
+        ? { page: 1, limit: 100 } 
+        : { organizationId: orgId || undefined, page: 1, limit: 100 };
+      contactListService.getContactLists(listParams).then((r: any) => {
         const arr = (r?.data?.data ?? r?.data ?? []) as any[];
         setLists(arr.map((l: any) => ({ id: l.id, name: l.name, contactCount: l.contactCount || 0 })));
       }).catch(() => setLists([]));
     }
-    if (id && orgId) {
-      loadCampaign();
+    
+    // Load campaign if we have an id
+    // For employees: don't require organizationId (apiService will handle it)
+    // For regular users: require organizationId
+    if (id) {
+      if (!isEmployee || selectedOrganizationId || user?.organizationId) {
+        loadCampaign();
+      }
     } else {
-      setCampaign((prev) => ({ ...prev, organizationId: orgId }));
+      setCampaign((prev) => ({ ...prev, organizationId: orgId || undefined }));
     }
-  }, [id, user?.organizationId]);
+  }, [id, user?.organizationId, isEmployee, selectedOrganizationId, loadCampaign]);
 
   // Poll campaign data every 1 minute (only when viewing a campaign)
   useEffect(() => {
-    if (!id || !user?.organizationId) return;
+    if (!id) return;
+    // For employees: don't require organizationId (apiService will handle it)
+    // For regular users: require organizationId
+    if (!isEmployee && !user?.organizationId) return;
 
     // Set up polling interval (1 minute = 60000ms)
     const interval = setInterval(() => {

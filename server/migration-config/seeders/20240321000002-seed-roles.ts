@@ -20,10 +20,10 @@ export default {
           USERS: ['CREATE', 'READ', 'UPDATE', 'LIST', 'EXPORT'],
           EMPLOYEES: ['CREATE', 'READ', 'UPDATE', 'LIST', 'EXPORT'],
           // Campaign Management
-          CAMPAIGNS: ['READ', 'UPDATE', 'LIST', 'EXPORT'],
-          CONTACTS: ['READ', 'UPDATE', 'LIST', 'EXPORT'],
-          CONTACTLISTS: ['READ', 'UPDATE', 'LIST', 'EXPORT'],
-          TEMPLATES: ['READ', 'UPDATE', 'LIST', 'EXPORT'],
+          CAMPAIGNS: ['READ', 'LIST', 'EXPORT'],
+          CONTACTS: ['READ', 'LIST', 'EXPORT'],
+          CONTACTLISTS: ['READ', 'LIST', 'EXPORT'],
+          TEMPLATES: ['READ', 'LIST', 'EXPORT'],
           // Subscription Management
           SUBSCRIPTIONS: ['READ', 'UPDATE', 'LIST', 'EXPORT'],
           INVOICES: ['READ', 'UPDATE', 'LIST', 'EXPORT'],
@@ -118,10 +118,10 @@ export default {
           USERS: ['CREATE', 'READ', 'UPDATE', 'LIST', 'EXPORT'],
           EMPLOYEES: ['READ', 'UPDATE', 'LIST', 'EXPORT'],
           // Campaign Management
-          CAMPAIGNS: ['READ', 'UPDATE', 'LIST', 'EXPORT'],
-          CONTACTS: ['READ', 'UPDATE', 'LIST', 'EXPORT'],
-          CONTACTLISTS: ['READ', 'UPDATE', 'LIST', 'EXPORT'],
-          TEMPLATES: ['READ', 'UPDATE', 'LIST', 'EXPORT'],
+          CAMPAIGNS: ['READ', 'LIST', 'EXPORT'],
+          CONTACTS: ['READ', 'LIST', 'EXPORT'],
+          CONTACTLISTS: ['READ', 'LIST', 'EXPORT'],
+          TEMPLATES: ['READ', 'LIST', 'EXPORT'],
           // Subscription Management
           SUBSCRIPTIONS: ['READ', 'UPDATE', 'LIST', 'EXPORT'],
           INVOICES: ['READ', 'UPDATE', 'LIST', 'EXPORT'],
