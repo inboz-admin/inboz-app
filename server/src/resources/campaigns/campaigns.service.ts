@@ -640,28 +640,38 @@ export class CampaignsService extends BaseService<Campaign> {
           `Re-queuing ${cancelledEmails.length} cancelled email(s) for step ${step.id} (${stepName}) with step-order-aware quota distribution`,
         );
 
-        // Simple rule: Each step always starts from day 0 (today)
-        // The quota checking logic will naturally skip full days and fill available quota
-        // This ensures:
-        // - S1: Day 0 - 25, Day 1 - 5
-        // - S2: Day 0 - 0 (full, skipped), Day 1 - 20 (5 already used), Day 2 - 5
-        // - S3: Day 0 - 0 (full, skipped), Day 1 - 0 (full, skipped), Day 2 - 20 (5 already used), Day 3 - 10
-        const startDay: number | undefined = undefined; // Always start from day 0
-
-        this.logger.debug(
-          `Step ${step.stepOrder} (${stepName}): Starting quota distribution from day 0. ` +
-            `Quota checking will automatically skip full days and fill available quota.`,
-        );
-
-        // SIMPLE RESUME LOGIC:
-        // 1. Count how many emails are already sent in THIS step
-        // 2. Get remaining quota for each day (accounts for other campaigns/steps)
-        // 3. Start scheduling from last sent email time
-        // 4. Schedule all remaining emails, but only up to remaining quota for each day
-        // 5. Move extra to next day
-
         // Get timezone from step
         const timezone = step.timezone || 'UTC';
+
+        // Determine start day: For scheduled steps, respect scheduleTime if it's in the future
+        // For immediate steps or past scheduled times, start from day 0 (today)
+        let startDay: number | undefined = undefined;
+        if (step.triggerType === 'SCHEDULE' && step.scheduleTime) {
+          const scheduleTime = new Date(step.scheduleTime);
+          const now = new Date();
+          // If scheduleTime is in the future, calculate the day offset
+          if (scheduleTime > now) {
+            startDay = this.campaignSchedulingService.getDayFromScheduleTime(
+              scheduleTime,
+              timezone,
+            );
+            this.logger.debug(
+              `Step ${step.stepOrder} (${stepName}): Scheduled step - starting from day ${startDay} (scheduleTime: ${scheduleTime.toISOString()})`,
+            );
+          } else {
+            // Past scheduled time - start from day 0
+            startDay = undefined;
+            this.logger.debug(
+              `Step ${step.stepOrder} (${stepName}): Scheduled step is overdue - starting from day 0`,
+            );
+          }
+        } else {
+          // Immediate step - always start from day 0
+          startDay = undefined;
+          this.logger.debug(
+            `Step ${step.stepOrder} (${stepName}): Immediate step - starting from day 0`,
+          );
+        }
 
         // Count sent emails in THIS step on day 0 (today)
         const sentEmailsInThisStep = await this.emailMessageModel.count({
@@ -696,6 +706,7 @@ export class CampaignsService extends BaseService<Campaign> {
             quotaInfo.remaining,
             quotaInfo.dailyLimit,
             timezone,
+            startDay,
         );
 
         this.logger.log(

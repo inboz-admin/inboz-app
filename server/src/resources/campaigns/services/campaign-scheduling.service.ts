@@ -351,7 +351,7 @@ export class CampaignSchedulingService {
    * @param timezone The timezone to use for day calculation
    * @returns Day offset (0 = today, 1 = tomorrow, etc.)
    */
-  private getDayFromScheduleTime(scheduleTime: Date, timezone: string = 'UTC'): number {
+  getDayFromScheduleTime(scheduleTime: Date, timezone: string = 'UTC'): number {
     const now = new Date();
     const todayStart = getMidnightInTimezone(0, timezone);
     const scheduleDate = new Date(scheduleTime);
