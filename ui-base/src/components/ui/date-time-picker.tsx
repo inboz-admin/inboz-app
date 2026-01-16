@@ -17,9 +17,10 @@ import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 interface DateTimePickerProps {
   date: Date | undefined;
   setDate: (date: Date | undefined) => void;
+  disabled?: boolean;
 }
 
-export function DateTimePicker({ date, setDate }: DateTimePickerProps) {
+export function DateTimePicker({ date, setDate, disabled = false }: DateTimePickerProps) {
   const [isOpen, setIsOpen] = React.useState(false);
 
   const hours = Array.from({ length: 12 }, (_, i) => i + 1);
@@ -65,10 +66,11 @@ export function DateTimePicker({ date, setDate }: DateTimePickerProps) {
   };
 
   return (
-    <Popover open={isOpen} onOpenChange={setIsOpen}>
+    <Popover open={isOpen} onOpenChange={disabled ? undefined : setIsOpen}>
       <PopoverTrigger asChild>
         <Button
           variant="outline"
+          disabled={disabled}
           className={cn(
             "w-full justify-start text-left font-normal",
             !date && "text-muted-foreground"
@@ -87,8 +89,9 @@ export function DateTimePicker({ date, setDate }: DateTimePickerProps) {
           <Calendar
             mode="single"
             selected={date}
-            onSelect={handleDateSelect}
+            onSelect={disabled ? undefined : handleDateSelect}
             initialFocus
+            disabled={disabled ? () => true : undefined}
           />
           <div className="flex flex-col sm:flex-row sm:h-[300px] divide-y sm:divide-y-0 sm:divide-x">
             <ScrollArea className="w-64 sm:w-auto">
@@ -104,6 +107,7 @@ export function DateTimePicker({ date, setDate }: DateTimePickerProps) {
                     }
                     className="sm:w-full shrink-0 aspect-square"
                     onClick={() => handleTimeChange("hour", hour.toString())}
+                    disabled={disabled}
                   >
                     {hour}
                   </Button>
@@ -126,6 +130,7 @@ export function DateTimePicker({ date, setDate }: DateTimePickerProps) {
                     onClick={() =>
                       handleTimeChange("minute", minute.toString())
                     }
+                    disabled={disabled}
                   >
                     {minute.toString().padStart(2, '0')}
                   </Button>
@@ -148,6 +153,7 @@ export function DateTimePicker({ date, setDate }: DateTimePickerProps) {
                     }
                     className="sm:w-full shrink-0 aspect-square"
                     onClick={() => handleTimeChange("ampm", ampm)}
+                    disabled={disabled}
                   >
                     {ampm}
                   </Button>

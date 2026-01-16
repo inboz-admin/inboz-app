@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { emailTemplateService } from '@/api/emailTemplateService';
 import { contactListService } from '@/api/contactListService';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAppStore } from '@/stores/appStore';
 import { StepModal } from './StepModal';
 import { Separator } from '@/components/ui/separator';
@@ -56,6 +56,7 @@ export function CampaignBuilderPage() {
   const [emailModalStepId, setEmailModalStepId] = useState<string | null>(null);
   const [emailModalEventType, setEmailModalEventType] = useState<'OPENED' | 'CLICKED' | 'REPLIED' | 'BOUNCED' | 'UNSUBSCRIBED' | undefined>(undefined);
   const [metricsModalOpen, setMetricsModalOpen] = useState(false);
+  const [isViewingStep, setIsViewingStep] = useState(false);
   const [isDeleteStepDialogOpen, setIsDeleteStepDialogOpen] = useState(false);
   const [stepToDelete, setStepToDelete] = useState<CampaignStep | null>(null);
   const [overdueStepsAlertOpen, setOverdueStepsAlertOpen] = useState(false);
@@ -89,6 +90,8 @@ export function CampaignBuilderPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAppStore();
+  const [searchParams] = useSearchParams();
+  const isViewMode = searchParams.get('view') === 'true';
 
   const effectiveOrgId = campaign.organizationId || user?.organizationId || '';
   const canSave = useMemo(() => !!effectiveOrgId && !!campaign?.name && !!(campaign as any).contactListId, [effectiveOrgId, campaign]);
@@ -579,6 +582,7 @@ export function CampaignBuilderPage() {
       return;
     }
     setEditingStep(step);
+    setIsViewingStep(false);
     setStepModalOpen(true);
   };
 
@@ -697,22 +701,32 @@ export function CampaignBuilderPage() {
     <div className="p-4 space-y-6">
       <Card className="shadow-xs">
         <CardHeader>
-          <CardTitle>Campaign Builder</CardTitle>
+          <CardTitle>{isViewMode ? 'Campaign Details (View Only)' : 'Campaign Builder'}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
+          {isViewMode && (
+            <div className="mb-4 p-3 bg-muted rounded-md">
+              <p className="text-sm text-muted-foreground">View Mode - All actions are disabled</p>
+            </div>
+          )}
           <div className="flex gap-4 items-end">
             <div className="space-y-2 flex-1">
               <Label>Campaign Name *</Label>
-              <Input placeholder="Campaign name" value={campaign.name || ''} onChange={(e) => setCampaign({ ...campaign, name: e.target.value })} />
+              <Input 
+                placeholder="Campaign name" 
+                value={campaign.name || ''} 
+                onChange={(e) => setCampaign({ ...campaign, name: e.target.value })} 
+                disabled={isViewMode}
+              />
             </div>
             <div className="space-y-2 flex-1">
               <Label>Contact List *</Label>
               <Select 
                 value={(campaign as any).contactListId || ''} 
                 onValueChange={(v) => setCampaign({ ...campaign, contactListId: v as any })}
-                disabled={!!campaign.id}
+                disabled={!!campaign.id || isViewMode}
               >
-                <SelectTrigger className="w-full" disabled={!!campaign.id}>
+                <SelectTrigger className="w-full" disabled={!!campaign.id || isViewMode}>
                   <SelectValue placeholder="Select contact list" />
                 </SelectTrigger>
                 <SelectContent>
@@ -729,18 +743,22 @@ export function CampaignBuilderPage() {
                 </SelectContent>
               </Select>
             </div>
-            <Button disabled={!canSave || saving} onClick={onSave}>
-              {saving ? 'Saving...' : campaign.id ? 'Update Campaign' : 'Create Campaign'}
-            </Button>
+            {!isViewMode && (
+              <Button disabled={!canSave || saving} onClick={onSave}>
+                {saving ? 'Saving...' : campaign.id ? 'Update Campaign' : 'Create Campaign'}
+              </Button>
+            )}
             {campaign.id && (
               <>
                 <div className="flex items-center gap-2 px-3 py-2 border rounded-md">
                   <Switch 
                     checked={campaign.status === 'ACTIVE'} 
                     onCheckedChange={toggleActive} 
-                    disabled={campaign.status === 'COMPLETED' || steps.length === 0}
+                    disabled={campaign.status === 'COMPLETED' || steps.length === 0 || isViewMode}
                     title={
-                      campaign.status === 'COMPLETED' 
+                      isViewMode
+                        ? 'View mode - actions disabled'
+                        : campaign.status === 'COMPLETED' 
                         ? 'Campaign completed - cannot be reactivated' 
                         : steps.length === 0 
                         ? 'Add steps before activating campaign'
@@ -791,6 +809,7 @@ export function CampaignBuilderPage() {
                           <Switch
                             checked={campaign.openTracking ?? true}
                             onCheckedChange={(checked) => setCampaign({ ...campaign, openTracking: checked })}
+                            disabled={isViewMode}
                           />
                           <div className="flex-1">
                             <Label className="font-normal cursor-pointer">Open Tracking</Label>
@@ -801,6 +820,7 @@ export function CampaignBuilderPage() {
                           <Switch
                             checked={campaign.clickTracking ?? true}
                             onCheckedChange={(checked) => setCampaign({ ...campaign, clickTracking: checked })}
+                            disabled={isViewMode}
                           />
                           <div className="flex-1">
                             <Label className="font-normal cursor-pointer">Click Tracking</Label>
@@ -821,6 +841,7 @@ export function CampaignBuilderPage() {
                           <Switch
                             checked={campaign.unsubscribeTracking ?? true}
                             onCheckedChange={(checked) => setCampaign({ ...campaign, unsubscribeTracking: checked })}
+                            disabled={isViewMode}
                           />
                           <div className="flex-1">
                             <Label className="font-normal cursor-pointer">Add Unsubscribe Link</Label>
@@ -838,6 +859,7 @@ export function CampaignBuilderPage() {
                                 unsubscribeCustomMessage: checked ? campaign.unsubscribeCustomMessage : undefined
                               });
                             }}
+                            disabled={isViewMode}
                           />
                           <div className="flex-1">
                             <Label className="font-normal cursor-pointer">Enable Custom Reply Unsubscribe</Label>
@@ -853,6 +875,7 @@ export function CampaignBuilderPage() {
                               value={campaign.unsubscribeCustomMessage || ''}
                               onChange={(e) => setCampaign({ ...campaign, unsubscribeCustomMessage: e.target.value })}
                               className="min-h-[80px]"
+                              disabled={isViewMode}
                             />
                             {campaign.unsubscribeReplyEnabled && !campaign.unsubscribeCustomMessage?.trim() && (
                               <p className="text-xs text-destructive">Custom unsubscribe message is required when custom reply unsubscribe is enabled</p>
@@ -918,9 +941,11 @@ export function CampaignBuilderPage() {
                 <div className="space-y-1">
                   <h3 className="text-lg font-semibold">Sequences</h3>
                 </div>
-                <Button onClick={() => { setEditingStep(null); setStepModalOpen(true); }}>
-                  Add Sequence
-                </Button>
+                {!isViewMode && (
+                  <Button onClick={() => { setEditingStep(null); setStepModalOpen(true); }}>
+                    Add Sequence
+                  </Button>
+                )}
               </div>
               {steps.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
@@ -1051,30 +1076,52 @@ export function CampaignBuilderPage() {
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end">
                                 <DropdownMenuItem 
-                                  onClick={() => handleEditStep(step)}
-                                  disabled={!canEditStep(step)}
-                                  title={(() => {
-                                    if (canEditStep(step)) {
-                                      if (campaign.status === 'ACTIVE' && step.triggerType === 'SCHEDULE') {
-                                        return 'Edit scheduled step (not started yet)';
-                                      }
-                                      return 'Edit step';
-                                    }
-                                    return 'Cannot edit steps while campaign is running. Please pause the campaign first.';
-                                  })()}
+                                  onClick={() => {
+                                    setEditingStep(step);
+                                    setIsViewingStep(true);
+                                    setStepModalOpen(true);
+                                  }}
                                 >
-                                  Edit
+                                  View
                                 </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => {
-                                  setEmailModalStepId(step.id);
-                                  setEmailModalEventType(undefined);
-                                  setEmailModalOpen(true);
-                                }}>
-                                  Email Stats
-                                </DropdownMenuItem>
-                                <DropdownMenuItem className="text-red-600" onClick={() => handleDeleteStep(step)}>
-                                  Delete
-                                </DropdownMenuItem>
+                                {!isViewMode && (
+                                  <>
+                                    <DropdownMenuItem 
+                                      onClick={() => handleEditStep(step)}
+                                      disabled={!canEditStep(step)}
+                                      title={(() => {
+                                        if (canEditStep(step)) {
+                                          if (campaign.status === 'ACTIVE' && step.triggerType === 'SCHEDULE') {
+                                            return 'Edit scheduled step (not started yet)';
+                                          }
+                                          return 'Edit step';
+                                        }
+                                        return 'Cannot edit steps while campaign is running. Please pause the campaign first.';
+                                      })()}
+                                    >
+                                      Edit
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => {
+                                      setEmailModalStepId(step.id);
+                                      setEmailModalEventType(undefined);
+                                      setEmailModalOpen(true);
+                                    }}>
+                                      Email Stats
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem className="text-red-600" onClick={() => handleDeleteStep(step)}>
+                                      Delete
+                                    </DropdownMenuItem>
+                                  </>
+                                )}
+                                {isViewMode && (
+                                  <DropdownMenuItem onClick={() => {
+                                    setEmailModalStepId(step.id);
+                                    setEmailModalEventType(undefined);
+                                    setEmailModalOpen(true);
+                                  }}>
+                                    Email Stats
+                                  </DropdownMenuItem>
+                                )}
                               </DropdownMenuContent>
                             </DropdownMenu>
                           </TableCell>
@@ -1091,12 +1138,17 @@ export function CampaignBuilderPage() {
 
       <StepModal
         open={stepModalOpen}
-        onClose={() => { setStepModalOpen(false); setEditingStep(null); }}
+        onClose={() => { 
+          setStepModalOpen(false); 
+          setEditingStep(null); 
+          setIsViewingStep(false);
+        }}
         onSave={handleSaveStep}
         templates={templates}
         editingStep={editingStep}
         existingSteps={steps}
         currentStepOrder={editingStep?.stepOrder}
+        readOnly={isViewingStep}
       />
 
       {campaign.id && emailModalStepId && (
@@ -1135,31 +1187,6 @@ export function CampaignBuilderPage() {
           quotaStats={quotaStats}
           totalEmails={(campaign.totalRecipients || 0) * steps.length}
           estimatedDays={quotaStats ? Math.max(1, Math.ceil(((campaign.totalRecipients || 0) * steps.length - quotaStats.remaining) / quotaStats.limit)) : 1}
-        />
-      )}
-
-      <StepModal
-        open={stepModalOpen}
-        onClose={() => { setStepModalOpen(false); setEditingStep(null); }}
-        onSave={handleSaveStep}
-        templates={templates}
-        editingStep={editingStep}
-        existingSteps={steps}
-        currentStepOrder={editingStep?.stepOrder}
-      />
-
-      {campaign.id && emailModalStepId && (
-        <EmailMessagesModal
-          open={emailModalOpen}
-          onClose={() => {
-            setEmailModalOpen(false);
-            setEmailModalStepId(null);
-            setEmailModalEventType(undefined);
-          }}
-          campaignId={campaign.id}
-          stepId={emailModalStepId}
-          eventType={emailModalEventType}
-          stepName={steps.find(s => s.id === emailModalStepId)?.name || undefined}
         />
       )}
 
@@ -1245,6 +1272,7 @@ export function CampaignBuilderPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
     </div>
   );
 }

@@ -60,7 +60,7 @@ export function EmailMessagesModal({
 }: EmailMessagesModalProps) {
   const [emails, setEmails] = useState<EmailMessage[]>([]);
   const [loading, setLoading] = useState(false);
-  const [statusFilter, setStatusFilter] = useState<string>('ALL');
+  const [eventTypeFilter, setEventTypeFilter] = useState<string>(initialEventType || 'ALL');
   const [totalItems, setTotalItems] = useState(0);
   
   // Pagination state
@@ -69,10 +69,17 @@ export function EmailMessagesModal({
     pageSize: 50,
   });
 
-  // Reset to first page when status filter changes
+  // Reset eventTypeFilter when initialEventType changes
+  useEffect(() => {
+    if (initialEventType) {
+      setEventTypeFilter(initialEventType);
+    }
+  }, [initialEventType]);
+
+  // Reset to first page when event type filter changes
   useEffect(() => {
     setPagination(prev => ({ ...prev, pageIndex: 0 }));
-  }, [statusFilter]);
+  }, [eventTypeFilter]);
 
   useEffect(() => {
     if (open && campaignId && stepId) {
@@ -80,8 +87,33 @@ export function EmailMessagesModal({
       const currentPage = pagination.pageIndex + 1; // TanStack uses 0-based, API uses 1-based
       const pageSize = pagination.pageSize;
       
-      // Fetch emails with pagination and status filter
-      CampaignsApi.getStepEmails(campaignId, stepId, undefined, currentPage, pageSize, statusFilter)
+      // Map eventTypeFilter to API eventType and status (same logic as EmailDetailsModal)
+      let eventType: string | undefined;
+      let status: string | undefined;
+      
+      if (eventTypeFilter === 'OPENED') {
+        eventType = 'OPENED';
+      } else if (eventTypeFilter === 'CLICKED') {
+        eventType = 'CLICKED';
+      } else if (eventTypeFilter === 'REPLIED') {
+        eventType = 'REPLIED';
+      } else if (eventTypeFilter === 'BOUNCED') {
+        eventType = 'BOUNCED';
+      } else if (eventTypeFilter === 'UNSUBSCRIBED') {
+        eventType = 'UNSUBSCRIBED';
+      } else if (eventTypeFilter === 'SENT') {
+        eventType = 'SENT';
+      } else if (eventTypeFilter === 'QUEUED') {
+        status = 'QUEUED';
+      } else if (eventTypeFilter === 'FAILED') {
+        status = 'FAILED';
+      } else if (eventTypeFilter === 'CANCELLED') {
+        status = 'CANCELLED';
+      }
+      // For 'ALL', both eventType and status remain undefined
+      
+      // Fetch emails with pagination and filter
+      CampaignsApi.getStepEmails(campaignId, stepId, eventType, currentPage, pageSize, status || 'ALL')
         .then((response: any) => {
           // Response structure from backend: { success: true, data: [...], total: 1152, totalPages: 29, page: 1, limit: 40 }
           // After apiService.get() wrapper: { success: true, data: { success: true, data: [...], total: 1152, ... } }
@@ -128,8 +160,9 @@ export function EmailMessagesModal({
       setEmails([]);
       setPagination({ pageIndex: 0, pageSize: 20 });
       setTotalItems(0);
+      setEventTypeFilter(initialEventType || 'ALL');
     }
-  }, [open, campaignId, stepId, pagination.pageIndex, pagination.pageSize, statusFilter]);
+  }, [open, campaignId, stepId, pagination.pageIndex, pagination.pageSize, eventTypeFilter, initialEventType]);
 
   // No client-side filtering - backend handles filtering
   const filteredEmails = emails;
@@ -317,16 +350,20 @@ export function EmailMessagesModal({
               Email Stats {stepName ? `- ${stepName}` : ''}
             </DialogTitle>
             <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">Status:</span>
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-[160px]">
-                  <SelectValue placeholder="All Status" />
+              <span className="text-sm text-muted-foreground">Filter:</span>
+              <Select value={eventTypeFilter} onValueChange={setEventTypeFilter}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="All Events" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="ALL">All Status</SelectItem>
-                  <SelectItem value="QUEUED">Queued</SelectItem>
-                  <SelectItem value="SENT">Sent</SelectItem>
+                  <SelectItem value="ALL">All Events</SelectItem>
+                  <SelectItem value="OPENED">Opened</SelectItem>
+                  <SelectItem value="CLICKED">Clicked</SelectItem>
+                  <SelectItem value="REPLIED">Replied</SelectItem>
                   <SelectItem value="BOUNCED">Bounced</SelectItem>
+                  <SelectItem value="UNSUBSCRIBED">Unsubscribed</SelectItem>
+                  <SelectItem value="SENT">Sent</SelectItem>
+                  <SelectItem value="QUEUED">Queued</SelectItem>
                   <SelectItem value="FAILED">Failed</SelectItem>
                   <SelectItem value="CANCELLED">Cancelled</SelectItem>
                 </SelectContent>

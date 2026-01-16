@@ -17,9 +17,10 @@ interface StepModalProps {
   editingStep?: CampaignStep | null;
   existingSteps?: CampaignStep[]; // Previous steps in the campaign
   currentStepOrder?: number; // Current step order (for filtering previous steps)
+  readOnly?: boolean; // If true, show in read-only mode (view only)
 }
 
-export function StepModal({ open, onClose, onSave, templates, editingStep, existingSteps = [], currentStepOrder }: StepModalProps) {
+export function StepModal({ open, onClose, onSave, templates, editingStep, existingSteps = [], currentStepOrder, readOnly = false }: StepModalProps) {
   const [name, setName] = useState('');
   const [templateId, setTemplateId] = useState('');
   const [triggerType, setTriggerType] = useState<'IMMEDIATE' | 'SCHEDULE'>('IMMEDIATE');
@@ -172,7 +173,13 @@ export function StepModal({ open, onClose, onSave, templates, editingStep, exist
     <Dialog open={open} onOpenChange={(open) => !open && handleClose()}>
       <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{editingStep ? 'Edit Sequence' : 'Add Sequence'}</DialogTitle>
+          <DialogTitle>
+            {readOnly 
+              ? 'View Sequence'
+              : editingStep 
+              ? 'Edit Sequence' 
+              : 'Add Sequence'}
+          </DialogTitle>
         </DialogHeader>
         <div className="space-y-4 py-4">
           <div className="grid grid-cols-2 gap-4">
@@ -183,12 +190,13 @@ export function StepModal({ open, onClose, onSave, templates, editingStep, exist
                 placeholder="Enter sequence name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
+                disabled={readOnly}
               />
             </div>
             <div className="space-y-2">
               <Label htmlFor="step-template">Email Template *</Label>
-              <Select value={templateId} onValueChange={setTemplateId}>
-                <SelectTrigger id="step-template" className="w-full">
+              <Select value={templateId} onValueChange={setTemplateId} disabled={readOnly}>
+                <SelectTrigger id="step-template" className="w-full" disabled={readOnly}>
                   <SelectValue placeholder="Select template" />
                 </SelectTrigger>
                 <SelectContent>
@@ -207,8 +215,9 @@ export function StepModal({ open, onClose, onSave, templates, editingStep, exist
               <Select 
                 value={triggerType} 
                 onValueChange={(v) => setTriggerType(v as 'IMMEDIATE' | 'SCHEDULE')}
+                disabled={readOnly}
               >
-                <SelectTrigger id="trigger-type" className="w-full">
+                <SelectTrigger id="trigger-type" className="w-full" disabled={readOnly}>
                   <SelectValue placeholder="Select trigger" />
                 </SelectTrigger>
                 <SelectContent>
@@ -235,6 +244,7 @@ export function StepModal({ open, onClose, onSave, templates, editingStep, exist
                 min="0.5"
                 step="0.1"
                 required
+                disabled={readOnly}
                 className="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
               />
               <p className="text-xs text-muted-foreground">
@@ -256,14 +266,15 @@ export function StepModal({ open, onClose, onSave, templates, editingStep, exist
               <DateTimePicker 
                 date={scheduledDateTime} 
                 setDate={setScheduledDateTime}
+                disabled={readOnly}
               />
               <p className="text-xs text-muted-foreground">Required for scheduled sequences</p>
             </div>
           )}
           <div className="space-y-2">
             <Label htmlFor="step-timezone">Timezone *</Label>
-            <Select value={timezone} onValueChange={setTimezone}>
-              <SelectTrigger id="step-timezone" className="w-full">
+            <Select value={timezone} onValueChange={setTimezone} disabled={readOnly}>
+              <SelectTrigger id="step-timezone" className="w-full" disabled={readOnly}>
                 <SelectValue placeholder="Select timezone" />
               </SelectTrigger>
               <SelectContent>
@@ -284,8 +295,9 @@ export function StepModal({ open, onClose, onSave, templates, editingStep, exist
               <Select 
                 value={replyToStepId || undefined} 
                 onValueChange={(value) => setReplyToStepId(value)}
+                disabled={readOnly}
               >
-                <SelectTrigger id="reply-to-step" className="w-full">
+                <SelectTrigger id="reply-to-step" className="w-full" disabled={readOnly}>
                   <SelectValue placeholder="None - Send to all contacts" />
                 </SelectTrigger>
                 <SelectContent>
@@ -302,8 +314,8 @@ export function StepModal({ open, onClose, onSave, templates, editingStep, exist
               {replyToStepId && (
                 <div className="space-y-2">
                   <Label htmlFor="reply-type">Filter Follow Up List *</Label>
-                  <Select value={replyType} onValueChange={(v) => setReplyType(v as 'OPENED' | 'CLICKED')}>
-                    <SelectTrigger id="reply-type" className="w-full">
+                  <Select value={replyType} onValueChange={(v) => setReplyType(v as 'OPENED' | 'CLICKED')} disabled={readOnly}>
+                    <SelectTrigger id="reply-type" className="w-full" disabled={readOnly}>
                       <SelectValue placeholder="Select type" />
                     </SelectTrigger>
                     <SelectContent>
@@ -324,12 +336,20 @@ export function StepModal({ open, onClose, onSave, templates, editingStep, exist
           )}
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={handleClose}>
-            Cancel
-          </Button>
-          <Button onClick={handleSave} disabled={!canSave}>
-            Save Sequence
-          </Button>
+          {readOnly ? (
+            <Button variant="outline" onClick={handleClose}>
+              Close
+            </Button>
+          ) : (
+            <>
+              <Button variant="outline" onClick={handleClose}>
+                Cancel
+              </Button>
+              <Button onClick={handleSave} disabled={!canSave}>
+                Save Sequence
+              </Button>
+            </>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

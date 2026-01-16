@@ -724,6 +724,7 @@ function CampaignRow({
             <Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => navigate(`/dashboard/campaigns/${campaign.id}?view=true`)}>View</DropdownMenuItem>
             {canPerformAction(ActionType.UPDATE) && (
               <DropdownMenuItem onClick={() => navigate(`/dashboard/campaigns/${campaign.id}`)}>Edit</DropdownMenuItem>
             )}
