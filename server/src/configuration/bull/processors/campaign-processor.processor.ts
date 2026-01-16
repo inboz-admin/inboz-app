@@ -18,6 +18,7 @@ import { getMidnightInTimezone } from 'src/common/utils/timezone.util';
 import { RateLimiterService } from 'src/common/services/rate-limiter.service';
 import { QuotaManagementService } from 'src/common/services/quota-management.service';
 import { CampaignSchedulingService } from 'src/resources/campaigns/services/campaign-scheduling.service';
+import { MAX_SCHEDULE_DAYS } from 'src/resources/campaigns/constants/campaign.constants';
 import { QueueName } from '../enums/queue.enum';
 
 /**
@@ -598,12 +599,51 @@ export class CampaignProcessorProcessor extends WorkerHost {
         const timezone = step.timezone || 'UTC';
         this.logger.log(`Using timezone: ${timezone} for step ${step.stepOrder}`);
 
+        // For scheduled campaigns, determine which day the scheduleTime falls on
+        let startDay: number | undefined = undefined;
+        if (step.triggerType === 'SCHEDULE' && step.scheduleTime) {
+          const scheduleTime = new Date(step.scheduleTime);
+          // Use the same helper logic as in CampaignSchedulingService
+          const todayStart = getMidnightInTimezone(0, timezone);
+          
+          // Find which day the scheduleTime falls on
+          for (let day = 0; day <= MAX_SCHEDULE_DAYS; day++) {
+            const dayStart = getMidnightInTimezone(day, timezone);
+            const dayEnd = getMidnightInTimezone(day + 1, timezone);
+            
+            if (scheduleTime >= dayStart && scheduleTime < dayEnd) {
+              startDay = day;
+              this.logger.log(
+                `📅 Scheduled step ${step.stepOrder}: scheduleTime=${scheduleTime.toISOString()}, startDay=${startDay}`
+              );
+              break;
+            }
+          }
+          
+          if (startDay === undefined) {
+            // If scheduleTime is in the past, use day 0
+            if (scheduleTime < todayStart) {
+              startDay = 0;
+              this.logger.warn(
+                `⚠️ Schedule time ${scheduleTime.toISOString()} is in the past, using day 0`
+              );
+            } else {
+              // Beyond MAX_SCHEDULE_DAYS, use MAX_SCHEDULE_DAYS
+              startDay = MAX_SCHEDULE_DAYS;
+              this.logger.warn(
+                `⚠️ Schedule time ${scheduleTime.toISOString()} is beyond ${MAX_SCHEDULE_DAYS} days, using day ${MAX_SCHEDULE_DAYS}`
+              );
+            }
+          }
+        }
+
         quotaDistribution = await this.campaignSchedulingService.calculateQuotaDistribution(
           userId,
           emailsForThisStep,
           remainingQuota,
           DAILY_LIMIT,
           timezone,
+          startDay,
         );
         
         // Adjust indices to be global (accounting for previous steps)

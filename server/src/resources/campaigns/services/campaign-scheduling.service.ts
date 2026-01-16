@@ -241,9 +241,19 @@ export class CampaignSchedulingService {
       `🎯 [SCHEDULE] Daily limit from plan: ${dailyLimit} emails/day`
     );
     
+    // For scheduled campaigns, determine which day the scheduleTime falls on
+    let startDay: number | undefined = undefined;
+    if (step.triggerType === 'SCHEDULE' && step.scheduleTime) {
+      const scheduleTime = new Date(step.scheduleTime);
+      startDay = this.getDayFromScheduleTime(scheduleTime, timezone);
+      this.logger.log(
+        `📅 Scheduled campaign: scheduleTime=${scheduleTime.toISOString()}, startDay=${startDay}`
+      );
+    }
+    
     this.logger.log(
       `🎯 [SCHEDULE] Calling calculateQuotaDistribution with: ` +
-      `totalEmails=${totalEmails}, remainingQuota=${quotaStats.remaining}, dailyLimit=${dailyLimit}`
+      `totalEmails=${totalEmails}, remainingQuota=${quotaStats.remaining}, dailyLimit=${dailyLimit}, startDay=${startDay ?? 0}`
     );
     
     const quotaDistribution = await this.calculateQuotaDistribution(
@@ -252,6 +262,7 @@ export class CampaignSchedulingService {
       quotaStats.remaining,
       dailyLimit,
       timezone,
+      startDay,
     );
     
     this.logger.log(
@@ -335,9 +346,51 @@ export class CampaignSchedulingService {
   }
 
   /**
+   * Helper function to determine which day a scheduleTime falls on
+   * @param scheduleTime The scheduled time (UTC Date)
+   * @param timezone The timezone to use for day calculation
+   * @returns Day offset (0 = today, 1 = tomorrow, etc.)
+   */
+  private getDayFromScheduleTime(scheduleTime: Date, timezone: string = 'UTC'): number {
+    const now = new Date();
+    const todayStart = getMidnightInTimezone(0, timezone);
+    const scheduleDate = new Date(scheduleTime);
+    
+    // Find which day the scheduleTime falls on
+    for (let day = 0; day <= MAX_SCHEDULE_DAYS; day++) {
+      const dayStart = getMidnightInTimezone(day, timezone);
+      const dayEnd = getMidnightInTimezone(day + 1, timezone);
+      
+      if (scheduleDate >= dayStart && scheduleDate < dayEnd) {
+        this.logger.log(
+          `📅 Schedule time ${scheduleDate.toISOString()} falls on day ${day} (timezone: ${timezone})`
+        );
+        return day;
+      }
+    }
+    
+    // If scheduleTime is in the past, return 0 (today)
+    if (scheduleDate < todayStart) {
+      this.logger.warn(
+        `⚠️ Schedule time ${scheduleDate.toISOString()} is in the past, using day 0`
+      );
+      return 0;
+    }
+    
+    // If scheduleTime is beyond MAX_SCHEDULE_DAYS, return MAX_SCHEDULE_DAYS
+    this.logger.warn(
+      `⚠️ Schedule time ${scheduleDate.toISOString()} is beyond ${MAX_SCHEDULE_DAYS} days, using day ${MAX_SCHEDULE_DAYS}`
+    );
+    return MAX_SCHEDULE_DAYS;
+  }
+
+  /**
    * Calculate quota distribution across days
    * Optimized: Uses batch quota checking instead of per-day queries (OPTIMIZATION: Issue #4)
    * Exposed as public method for use in activation validation
+   * 
+   * @param startDay Optional day to start distribution from (for scheduled campaigns)
+   *                 If not provided, starts from day 0 (today)
    */
   async calculateQuotaDistribution(
     userId: string,
@@ -345,6 +398,7 @@ export class CampaignSchedulingService {
     remainingQuota: number,
     dailyLimit: number,
     timezone: string = 'UTC',
+    startDay?: number,
   ): Promise<
     Array<{
       day: number;
@@ -353,9 +407,12 @@ export class CampaignSchedulingService {
       quotaUsed: number;
     }>
   > {
+    // Determine start day: use provided startDay, or calculate from scheduleTime if provided
+    let actualStartDay = startDay ?? 0;
+    
     this.logger.log(
       `🚀 [QUOTA-DIST] calculateQuotaDistribution START: ` +
-      `userId=${userId}, totalEmails=${totalEmails}, remainingQuota=${remainingQuota}, dailyLimit=${dailyLimit}, timezone=${timezone}`
+      `userId=${userId}, totalEmails=${totalEmails}, remainingQuota=${remainingQuota}, dailyLimit=${dailyLimit}, timezone=${timezone}, startDay=${actualStartDay}`
     );
     
     const distribution: Array<{
@@ -365,26 +422,72 @@ export class CampaignSchedulingService {
       quotaUsed: number;
     }> = [];
     let currentIndex = 0;
-    let day = 0;
+    let day = actualStartDay;
 
     // Calculate maximum days needed (with safety buffer)
     const maxDaysNeeded = Math.ceil(totalEmails / dailyLimit) + SAFETY_BUFFER_DAYS;
-    const maxDays = Math.min(maxDaysNeeded, MAX_SCHEDULE_DAYS);
+    // For scheduled campaigns, we need to query from startDay onwards, but also account for
+    // the case where startDay has no quota - we need to find the first available day
+    // So we query from startDay to startDay + maxDaysNeeded, but ensure we query enough days
+    const endDay = Math.min(actualStartDay + maxDaysNeeded, MAX_SCHEDULE_DAYS);
     
     this.logger.log(
-      `🚀 [QUOTA-DIST] Calculated maxDays: ${maxDays} (needed: ${maxDaysNeeded}, limit: ${MAX_SCHEDULE_DAYS})`
+      `🚀 [QUOTA-DIST] Calculated endDay: ${endDay} (startDay: ${actualStartDay}, needed: ${maxDaysNeeded}, limit: ${MAX_SCHEDULE_DAYS})`
     );
 
     // Batch query quota for all days at once (OPTIMIZATION: Issue #4)
+    // Query from startDay to endDay to account for scheduled campaigns starting on future days
+    // IMPORTANT: Even if startDay has no quota, we'll skip to the first available day
     this.logger.log(
-      `🚀 [QUOTA-DIST] Batch querying quota for days 0-${maxDays} (${maxDays + 1} days)`
+      `🚀 [QUOTA-DIST] Batch querying quota for days ${actualStartDay}-${endDay} (${endDay - actualStartDay + 1} days)`
     );
     const quotaMap = await this.rateLimiterService.getRemainingQuotaForDays(
       userId,
-      0,
-      maxDays,
+      actualStartDay,
+      endDay,
       timezone,
     );
+    
+    // For scheduled campaigns: If startDay has no quota, find the first day with available quota
+    // This ensures scheduled campaigns don't start on days with no quota
+    if (startDay !== undefined && actualStartDay === startDay) {
+      const startDayQuota = quotaMap.get(actualStartDay) ?? 0;
+      if (startDayQuota <= 0) {
+        this.logger.log(
+          `⚠️ [QUOTA-DIST] Scheduled campaign startDay ${actualStartDay} has no quota (${startDayQuota}). ` +
+          `Finding first available day with quota...`
+        );
+        
+        // Find first day with available quota starting from startDay
+        let firstAvailableDay = actualStartDay;
+        for (let checkDay = actualStartDay; checkDay <= endDay; checkDay++) {
+          const quota = quotaMap.get(checkDay) ?? 0;
+          if (quota > 0) {
+            firstAvailableDay = checkDay;
+            this.logger.log(
+              `✅ [QUOTA-DIST] Found first available day: ${firstAvailableDay} with quota: ${quota}`
+            );
+            break;
+          }
+        }
+        
+        // If we found a day with quota, update actualStartDay and the loop variable
+        if (firstAvailableDay > actualStartDay) {
+          actualStartDay = firstAvailableDay;
+          day = actualStartDay; // Update the loop variable for the main while loop
+          this.logger.log(
+            `📅 [QUOTA-DIST] Updated startDay from ${startDay} to ${actualStartDay} (first day with available quota). ` +
+            `Will start distribution from day ${actualStartDay} instead of scheduled day ${startDay}.`
+          );
+        } else if (firstAvailableDay === actualStartDay && startDayQuota <= 0) {
+          // No quota found in the queried range - this is a problem
+          this.logger.warn(
+            `⚠️ [QUOTA-DIST] No quota available from startDay ${startDay} to endDay ${endDay}. ` +
+            `Campaign may not be able to schedule all emails. Will attempt to continue anyway.`
+          );
+        }
+      }
+    }
     
     this.logger.log(
       `🚀 [QUOTA-DIST] Quota map received: ${JSON.stringify(Array.from(quotaMap.entries()))}`
