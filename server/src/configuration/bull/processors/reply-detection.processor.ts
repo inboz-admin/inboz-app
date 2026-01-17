@@ -72,38 +72,110 @@ export class ReplyDetectionProcessor extends WorkerHost {
       }
 
       // Check this user's threads for reply emails with retry logic
-      const result = await retryWithBackoff(
-        () =>
-          this.replyDetectionService.checkUserThreadsForReplies(
-            userId,
-            userEmail,
-            accessToken,
-          ),
-        {
-          maxAttempts: 3,
-          onRetry: (attempt, error) => {
-            this.logger.debug(
-              `Retrying reply check for user ${userId} (attempt ${attempt}): ${error.message}`,
+      // Get token once and only refresh if auth error occurs
+      let currentAccessToken = accessToken;
+      let tokenRefreshed = false;
+      
+      try {
+        const result = await retryWithBackoff(
+          async () => {
+            // Use current token (will be refreshed if auth error occurred)
+            return await this.replyDetectionService.checkUserThreadsForReplies(
+              userId,
+              userEmail,
+              currentAccessToken,
             );
           },
-        },
-        this.logger,
-      );
+          {
+            maxAttempts: 3,
+            onRetry: async (attempt, error) => {
+              this.logger.debug(
+                `Retrying reply check for user ${userId} (attempt ${attempt}): ${error.message}`,
+              );
+              
+              // If auth error, refresh token before retry (only once)
+              if (requiresTokenRefresh(error) && !tokenRefreshed) {
+                this.logger.log(
+                  `Auth error detected, refreshing token for user ${userId} before retry`,
+                );
+                try {
+                  currentAccessToken = await this.tokenRefreshService.getValidAccessToken(
+                    userId,
+                    true, // Force refresh
+                  );
+                  tokenRefreshed = true;
+                  this.logger.log(`Token refreshed successfully for user ${userId}`);
+                } catch (refreshError) {
+                  this.logger.warn(
+                    `Token refresh failed for user ${userId}: ${(refreshError as Error).message}`,
+                  );
+                  // Continue with retry anyway - might work if token was just expired
+                }
+              }
+            },
+          },
+          this.logger,
+        );
+        
+        // Record success if we got a result
+        if (result) {
+          await this.circuitBreakerService.recordSuccess(userId);
+        }
 
-      // Record success if we got a result
-      if (result) {
-        await this.circuitBreakerService.recordSuccess(userId);
+        this.logger.log(
+          `✅ Reply detection completed for user ${userEmail}: found ${result.found}, processed ${result.processed}`,
+        );
+
+        return {
+          success: true,
+          found: result.found,
+          processed: result.processed,
+        };
+      } catch (error) {
+        // If auth error after all retries, try one more time with forced refresh
+        if (requiresTokenRefresh(error) && !tokenRefreshed) {
+          this.logger.log(
+            `Auth error after retries, attempting token refresh for user ${userId}`,
+          );
+          try {
+            // Force refresh token
+            currentAccessToken = await this.tokenRefreshService.getValidAccessToken(
+              userId,
+              true, // Force refresh
+            );
+            
+            // Try one more time with refreshed token
+            const result = await this.replyDetectionService.checkUserThreadsForReplies(
+              userId,
+              userEmail,
+              currentAccessToken,
+            );
+            
+            await this.circuitBreakerService.recordSuccess(userId);
+            this.logger.log(
+              `Successfully processed reply check after token refresh for user ${userId}`,
+            );
+            
+            return {
+              success: true,
+              found: result.found,
+              processed: result.processed,
+            };
+          } catch (refreshError) {
+            const refreshErr = refreshError as Error;
+            this.logger.error(
+              `Failed to refresh token or retry for user ${userId}: ${refreshErr.message}`,
+            );
+            await this.circuitBreakerService.recordFailure(userId);
+            throw refreshError;
+          }
+        }
+        
+        // Re-throw if not auth error or already tried refresh
+        await this.circuitBreakerService.recordFailure(userId);
+        throw error;
       }
 
-      this.logger.log(
-        `✅ Reply detection completed for user ${userEmail}: found ${result.found}, processed ${result.processed}`,
-      );
-
-      return {
-        success: true,
-        found: result.found,
-        processed: result.processed,
-      };
     } catch (error) {
       const err = error as Error;
       const classified = classifyGmailError(error);

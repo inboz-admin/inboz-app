@@ -14,7 +14,7 @@ export interface RetryOptions {
   maxDelay?: number; // in milliseconds
   backoffMultiplier?: number;
   retryableErrors?: GmailErrorType[];
-  onRetry?: (attempt: number, error: Error) => void;
+  onRetry?: (attempt: number, error: Error) => void | Promise<void>;
 }
 
 const DEFAULT_OPTIONS: Required<RetryOptions> = {
@@ -101,7 +101,11 @@ export async function retryWithBackoff<T>(
         );
       }
 
-      opts.onRetry(attempt, err);
+      // Call onRetry callback (supports async)
+      const onRetryResult = opts.onRetry(attempt, err);
+      if (onRetryResult instanceof Promise) {
+        await onRetryResult;
+      }
       await sleep(delay);
     }
   }

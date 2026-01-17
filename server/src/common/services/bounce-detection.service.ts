@@ -126,20 +126,45 @@ export class BounceDetectionService {
             }
 
             // Check this user's inbox for bounce emails with retry logic
+            // Get token once and only refresh if auth error occurs
+            let currentAccessToken = accessToken;
+            let tokenRefreshed = false;
+            
             const result = await retryWithBackoff(
-              () =>
-                this.checkUserInboxForBounces(
-              token.userId,
-              token.email,
-              accessToken,
+              async () => {
+                // Use current token (will be refreshed if auth error occurred)
+                return await this.checkUserInboxForBounces(
+                  token.userId,
+                  token.email,
+                  currentAccessToken,
                   token, // Pass token for History API support
-                ),
+                );
+              },
               {
                 maxAttempts: 3,
-                onRetry: (attempt, error) => {
+                onRetry: async (attempt, error) => {
                   this.logger.debug(
                     `Retrying bounce check for user ${token.userId} (attempt ${attempt}): ${error.message}`,
                   );
+                  
+                  // If auth error, refresh token before retry (only once)
+                  if (requiresTokenRefresh(error) && !tokenRefreshed) {
+                    this.logger.log(
+                      `Auth error detected, refreshing token for user ${token.userId} before retry`,
+                    );
+                    try {
+                      currentAccessToken = await this.tokenRefreshService.getValidAccessToken(
+                        token.userId,
+                        true, // Force refresh
+                      );
+                      tokenRefreshed = true;
+                      this.logger.log(`Token refreshed successfully for user ${token.userId}`);
+                    } catch (refreshError) {
+                      this.logger.warn(
+                        `Token refresh failed for user ${token.userId}: ${(refreshError as Error).message}`,
+                      );
+                    }
+                  }
                 },
               },
               this.logger,
@@ -422,8 +447,9 @@ export class BounceDetectionService {
         this.logger.warn(
           `Token refresh needed for user ${userEmail}: ${err.message}`,
         );
-        // Don't throw - token refresh will be attempted on next scheduler run
-        return stats;
+        // Throw error so processor can refresh token and retry
+        // This allows immediate token refresh instead of waiting for next scheduler run
+        throw error;
       }
 
       this.logger.error(
