@@ -1,4 +1,5 @@
 import { Module, Global, forwardRef } from '@nestjs/common';
+import { ScheduleModule } from '@nestjs/schedule';
 import { SequelizeModule } from '@nestjs/sequelize';
 import { UserContextService } from './services/user-context.service';
 import { CryptoUtilityService } from './services/crypto-utility.service';
@@ -41,6 +42,7 @@ import { BullModule } from 'src/configuration/bull/bull.module';
 @Global()
 @Module({
   imports: [
+    ScheduleModule.forRoot(), // Enable cron jobs - needed for SchedulerRegistry in ScheduledTasksService
     AuditLogsModule,
     forwardRef(() => CampaignsModule), // Forward ref to avoid circular dependency
     forwardRef(() => SubscriptionsModule), // For subscription expiry and renewal services
