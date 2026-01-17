@@ -33,9 +33,25 @@ async function bootstrap() {
     logger.log('📋 Active schedulers:');
     logger.log('   - Daily quota reset (midnight UTC)');
     logger.log('   - Campaign completion check (every 5 minutes)');
-    logger.log('   - Bounce detection (every 6 hours)');
-    logger.log('   - Reply detection (every 6 hours)');
-    logger.log('   - Selection session cleanup (every 6 hours)');
+    
+    // Show bounce and reply detection status from env vars
+    const bounceInterval = process.env.BOUNCE_DETECTION_INTERVAL;
+    const replyInterval = process.env.REPLY_DETECTION_INTERVAL;
+    
+    if (bounceInterval === '' || bounceInterval?.toLowerCase() === 'disabled') {
+      logger.log('   - Bounce detection: DISABLED (set BOUNCE_DETECTION_INTERVAL to enable)');
+    } else {
+      const bounceSchedule = bounceInterval || '0 */6 * * * (default)';
+      logger.log(`   - Bounce detection: ${bounceSchedule} (configurable via BOUNCE_DETECTION_INTERVAL)`);
+    }
+    
+    if (replyInterval === '' || replyInterval?.toLowerCase() === 'disabled') {
+      logger.log('   - Reply detection: DISABLED (set REPLY_DETECTION_INTERVAL to enable)');
+    } else {
+      const replySchedule = replyInterval || '0 */6 * * * (default)';
+      logger.log(`   - Reply detection: ${replySchedule} (configurable via REPLY_DETECTION_INTERVAL)`);
+    }
+    
     logger.log('⚠️  IMPORTANT: Only run ONE instance of the scheduler process!');
     logger.log('📈 Press Ctrl+C to stop');
 

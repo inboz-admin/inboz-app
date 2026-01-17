@@ -232,6 +232,8 @@ services:
       LOG_LEVEL: ${LOG_LEVEL}
       LOG_FILE: ${LOG_FILE}
       CORS_ORIGIN: ${CORS_ORIGIN}
+      BOUNCE_DETECTION_INTERVAL: ${BOUNCE_DETECTION_INTERVAL:-}
+      REPLY_DETECTION_INTERVAL: ${REPLY_DETECTION_INTERVAL:-}
     volumes:
       - uploads_data:/usr/src/app/uploads
       - logs_data:/usr/src/app/logs

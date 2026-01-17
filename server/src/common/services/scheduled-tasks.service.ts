@@ -1,5 +1,5 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { Cron, CronExpression } from '@nestjs/schedule';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Cron, CronExpression, SchedulerRegistry } from '@nestjs/schedule';
 import { InjectModel } from '@nestjs/sequelize';
 import { ConfigService } from '@nestjs/config';
 import { Campaign } from 'src/resources/campaigns/entities/campaign.entity';
@@ -20,6 +20,7 @@ import { AuditAction } from 'src/resources/audit-logs/entities/audit-log.entity'
 import { Op } from 'sequelize';
 import { NotificationEventService } from 'src/resources/notifications/services/notification-event.service';
 import { Inject, forwardRef } from '@nestjs/common';
+import { CronJob } from 'cron';
 
 /**
  * Scheduled Tasks Service
@@ -34,11 +35,11 @@ import { Inject, forwardRef } from '@nestjs/common';
  * with BullMQ handling delays via job delay options.
  */
 @Injectable()
-export class ScheduledTasksService {
+export class ScheduledTasksService implements OnModuleInit {
   private readonly logger = new Logger(ScheduledTasksService.name);
 
-  private bounceDetectionInterval: string;
-  private replyDetectionInterval: string;
+  private bounceDetectionInterval: string | null;
+  private replyDetectionInterval: string | null;
 
   constructor(
     @InjectModel(Campaign)
@@ -60,15 +61,66 @@ export class ScheduledTasksService {
     private readonly subscriptionExpiryService: SubscriptionExpiryService,
     private readonly subscriptionRenewalService: SubscriptionRenewalService,
     private readonly auditLogsService: AuditLogsService,
+    private readonly schedulerRegistry: SchedulerRegistry,
     @Inject(forwardRef(() => NotificationEventService))
     private readonly notificationEventService?: NotificationEventService,
   ) {
-    // Get intervals from config (default: every 6 hours)
-    const isProduction = this.configService.get('NODE_ENV') === 'production';
-    this.bounceDetectionInterval = this.configService.get('BOUNCE_DETECTION_INTERVAL') || 
-      '0 */6 * * *'; // Every 6 hours at minute 0
-    this.replyDetectionInterval = this.configService.get('REPLY_DETECTION_INTERVAL') || 
-      '0 */6 * * *'; // Every 6 hours at minute 0
+    // Get intervals from config
+    // If env var is empty string or 'disabled', the scheduler will not run
+    // If env var is not set, use default (every 6 hours)
+    const bounceInterval = this.configService.get<string>('BOUNCE_DETECTION_INTERVAL');
+    const replyInterval = this.configService.get<string>('REPLY_DETECTION_INTERVAL');
+    
+    // Set to null if explicitly disabled or empty, otherwise use provided value or default
+    if (bounceInterval && bounceInterval.trim() !== '' && bounceInterval.toLowerCase() !== 'disabled') {
+      this.bounceDetectionInterval = bounceInterval;
+    } else if (bounceInterval === '' || bounceInterval?.toLowerCase() === 'disabled') {
+      this.bounceDetectionInterval = null; // Explicitly disabled
+    } else {
+      this.bounceDetectionInterval = '0 */6 * * *'; // Default: every 6 hours at minute 0
+    }
+    
+    if (replyInterval && replyInterval.trim() !== '' && replyInterval.toLowerCase() !== 'disabled') {
+      this.replyDetectionInterval = replyInterval;
+    } else if (replyInterval === '' || replyInterval?.toLowerCase() === 'disabled') {
+      this.replyDetectionInterval = null; // Explicitly disabled
+    } else {
+      this.replyDetectionInterval = '0 */6 * * *'; // Default: every 6 hours at minute 0
+    }
+  }
+
+  onModuleInit() {
+    // Dynamically register bounce detection cron job if enabled
+    if (this.bounceDetectionInterval) {
+      const bounceJob = new CronJob(this.bounceDetectionInterval, () => {
+        this.checkForBounces();
+      });
+      this.schedulerRegistry.addCronJob('bounceDetection', bounceJob);
+      bounceJob.start();
+      this.logger.log(
+        `✅ Bounce detection scheduler registered with interval: ${this.bounceDetectionInterval}`,
+      );
+    } else {
+      this.logger.warn(
+        '⚠️  Bounce detection scheduler is DISABLED (BOUNCE_DETECTION_INTERVAL not set or disabled)',
+      );
+    }
+
+    // Dynamically register reply detection cron job if enabled
+    if (this.replyDetectionInterval) {
+      const replyJob = new CronJob(this.replyDetectionInterval, () => {
+        this.checkForReplies();
+      });
+      this.schedulerRegistry.addCronJob('replyDetection', replyJob);
+      replyJob.start();
+      this.logger.log(
+        `✅ Reply detection scheduler registered with interval: ${this.replyDetectionInterval}`,
+      );
+    } else {
+      this.logger.warn(
+        '⚠️  Reply detection scheduler is DISABLED (REPLY_DETECTION_INTERVAL not set or disabled)',
+      );
+    }
   }
 
   /**
@@ -225,8 +277,8 @@ export class ScheduledTasksService {
    * Check for bounce emails in Gmail inboxes
    * Enqueues jobs for individual accounts instead of processing directly
    * Interval is configurable via BOUNCE_DETECTION_INTERVAL env var
+   * Set BOUNCE_DETECTION_INTERVAL to empty string or 'disabled' to disable
    */
-  @Cron('0 */6 * * *') // Default: every 6 hours at minute 0 (overridden by config)
   async checkForBounces() {
     const schedulerName = 'BounceDetectionScheduler';
     this.schedulerHealthService.recordStart(schedulerName);
@@ -311,8 +363,8 @@ export class ScheduledTasksService {
    * Check for reply emails in Gmail threads
    * Enqueues jobs for individual accounts instead of processing directly
    * Interval is configurable via REPLY_DETECTION_INTERVAL env var
+   * Set REPLY_DETECTION_INTERVAL to empty string or 'disabled' to disable
    */
-  @Cron('0 */6 * * *') // Default: every 6 hours at minute 0 (overridden by config)
   async checkForReplies() {
     const schedulerName = 'ReplyDetectionScheduler';
     this.schedulerHealthService.recordStart(schedulerName);
