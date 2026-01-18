@@ -21,7 +21,7 @@ export const up = async (queryInterface: QueryInterface): Promise<void> => {
     },
     html_content: {
       type: DataTypes.TEXT('long'),
-      allowNull: false,
+      allowNull: true,
     },
     text_content: {
       type: DataTypes.TEXT('long'),

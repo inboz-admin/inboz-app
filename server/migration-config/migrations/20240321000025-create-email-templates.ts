@@ -33,6 +33,10 @@ export const up = async (queryInterface: QueryInterface): Promise<void> => {
       type: DataTypes.TEXT('long'),
       allowNull: true,
     },
+    plain_text: {
+      type: DataTypes.TEXT('long'),
+      allowNull: true,
+    },
     category: {
       type: DataTypes.STRING(100),
       allowNull: true,
