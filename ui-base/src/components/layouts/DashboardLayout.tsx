@@ -155,7 +155,6 @@ export default function DashboardLayout() {
 
   return (
     <>
-      <GmailTokenStatusBanner />
       <SidebarProvider>
         <AppSidebar />
         <SidebarInset>
@@ -205,6 +204,7 @@ export default function DashboardLayout() {
               <ThemeToggle />
             </div>
           </header>
+          <GmailTokenStatusBanner />
           <div className="flex flex-1 flex-col overflow-hidden">
             <Outlet />
           </div>

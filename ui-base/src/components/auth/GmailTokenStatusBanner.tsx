@@ -11,7 +11,13 @@ export function GmailTokenStatusBanner() {
   const { user } = useAppStore();
   const [scopes, setScopes] = useState<UserScopes | null>(null);
   const [loading, setLoading] = useState(true);
-  const [dismissed, setDismissed] = useState(false);
+  const [dismissed, setDismissed] = useState(() => {
+    // Check localStorage for dismissed state
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('gmail-banner-dismissed') === 'true';
+    }
+    return false;
+  });
 
   useEffect(() => {
     const checkTokenStatus = async () => {
@@ -45,71 +51,59 @@ export function GmailTokenStatusBanner() {
     return () => clearInterval(interval);
   }, [user]);
 
+  // Don't show if loading or dismissed
+  if (loading || dismissed) {
+    return null;
+  }
+
   // Only show if refresh token failed (INVALID or REVOKED)
-  // Don't show for EXPIRED (access token can auto-refresh)
-  // Don't show if loading, dismissed, or token is active
-  if (loading || dismissed || !scopes || !scopes.needsReAuth) {
+  if (!scopes || !scopes.needsReAuth || (scopes.tokenStatus !== 'INVALID' && scopes.tokenStatus !== 'REVOKED')) {
     return null;
   }
 
-  // Only show alert when refresh token itself is invalid/revoked
-  // EXPIRED status means access token expired but refresh token is still valid (can auto-refresh)
-  if (scopes.tokenStatus !== 'INVALID' && scopes.tokenStatus !== 'REVOKED') {
-    return null;
-  }
+  const handleDismiss = () => {
+    setDismissed(true);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('gmail-banner-dismissed', 'true');
+    }
+  };
 
-  const getStatusMessage = () => {
-    if (scopes.tokenStatus === 'INVALID') {
-      return 'Your Gmail refresh token has expired or been revoked. The system cannot automatically refresh your access token. Please re-authenticate to continue using Gmail features.';
+  const handleReAuthenticate = () => {
+    // Clear dismissed state when re-authenticating
+    setDismissed(false);
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('gmail-banner-dismissed');
     }
-    if (scopes.tokenStatus === 'REVOKED') {
-      return 'Your Gmail access has been revoked. Please re-authenticate to continue using Gmail features.';
-    }
-    return 'Your Gmail connection needs to be re-authenticated. Please connect your Gmail account to continue.';
+    gmailScopeService.requestGmailScopes();
   };
 
   return (
     <div className={cn(
-      "fixed top-0 left-0 right-0 z-50 border-b",
+      "w-full border-b",
       "bg-destructive/10 border-destructive/50",
       "dark:bg-destructive/20 dark:border-destructive/50",
-      "lg:left-64" // Account for sidebar width on desktop
+      "px-4 py-2"
     )}>
-      <div className="container mx-auto px-4 py-3">
-        <div className="flex items-start gap-3">
-          <AlertCircle className="h-5 w-5 text-destructive mt-0.5 flex-shrink-0" />
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-destructive">
-              Gmail Connection Issue
-            </p>
-            <p className="text-sm text-muted-foreground mt-1">
-              {getStatusMessage()}
-            </p>
-            {scopes.tokenEmail && (
-              <p className="text-xs text-muted-foreground mt-1">
-                Account: {scopes.tokenEmail}
-              </p>
-            )}
-          </div>
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <Button
-              variant="default"
-              size="sm"
-              onClick={() => gmailScopeService.requestGmailScopes()}
-              className="whitespace-nowrap"
-            >
-              Re-authenticate
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setDismissed(true)}
-              className="h-8 w-8 p-0"
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
+      <div className="flex items-center gap-2">
+        <AlertCircle className="h-4 w-4 text-destructive flex-shrink-0" />
+        <p className="text-sm text-destructive flex-1">
+          Gmail connection expired. Please re-authenticate.
+        </p>
+        <Button
+          variant="default"
+          size="sm"
+          onClick={handleReAuthenticate}
+          className="whitespace-nowrap h-7 text-xs px-3"
+        >
+          Re-authenticate
+        </Button>
+        <button
+          onClick={handleDismiss}
+          className="h-7 w-7 flex items-center justify-center hover:bg-destructive/20 rounded transition-colors"
+          aria-label="Dismiss"
+        >
+          <X className="h-4 w-4 text-destructive" />
+        </button>
       </div>
     </div>
   );
