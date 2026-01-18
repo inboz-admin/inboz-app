@@ -32,6 +32,9 @@ export default function ProfilePage() {
     hasGmailReadonly: boolean;
     hasGmailSend: boolean;
     hasAllGmailScopes: boolean;
+    tokenStatus?: 'ACTIVE' | 'EXPIRED' | 'REVOKED' | 'INVALID';
+    tokenEmail?: string;
+    needsReAuth?: boolean;
   } | null>(null);
   const [loadingScopes, setLoadingScopes] = useState(true);
   const [revokeDialogOpen, setRevokeDialogOpen] = useState(false);
@@ -190,9 +193,58 @@ export default function ProfilePage() {
             <p className="text-sm text-muted-foreground">Loading permissions...</p>
           ) : scopes ? (
             <>
+              {/* Token Status Alert - Only show when refresh token failed (INVALID/REVOKED) */}
+              {scopes.needsReAuth && (scopes.tokenStatus === 'INVALID' || scopes.tokenStatus === 'REVOKED') && (
+                <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4">
+                  <div className="flex items-start gap-3">
+                    <AlertCircle className="h-5 w-5 text-destructive mt-0.5 flex-shrink-0" />
+                    <div className="flex-1 space-y-2">
+                      <div>
+                        <p className="text-sm font-medium text-destructive">
+                          Gmail Connection Needs Re-authentication
+                        </p>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          {scopes.tokenStatus === 'INVALID' && 
+                            'Your Gmail refresh token has expired or been revoked. The system cannot automatically refresh your access token. Please re-authenticate to continue using Gmail features.'}
+                          {scopes.tokenStatus === 'REVOKED' && 
+                            'Your Gmail access has been revoked. Please re-authenticate to continue using Gmail features.'}
+                          {!scopes.tokenStatus && 
+                            'Your Gmail connection is not active. Please authenticate to use Gmail features.'}
+                        </p>
+                        {scopes.tokenEmail && (
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Connected account: {scopes.tokenEmail}
+                          </p>
+                        )}
+                      </div>
+                      <Button
+                        variant="default"
+                        size="sm"
+                        onClick={() => gmailScopeService.requestGmailScopes()}
+                        className="mt-2"
+                      >
+                        Re-authenticate Gmail
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                 <div className="flex-1">
-                  <p className="text-sm font-medium mb-2">Granted Permissions:</p>
+                  <div className="flex items-center gap-2 mb-2">
+                    <p className="text-sm font-medium">Granted Permissions:</p>
+                    {scopes.tokenStatus === 'ACTIVE' && (
+                      <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 dark:bg-green-950 dark:text-green-300 dark:border-green-800">
+                        Active
+                      </Badge>
+                    )}
+                    {scopes.tokenStatus && scopes.tokenStatus !== 'ACTIVE' && (
+                      <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200 dark:bg-red-950 dark:text-red-300 dark:border-red-800">
+                        {scopes.tokenStatus}
+                      </Badge>
+                    )}
+                  </div>
                   <div className="flex flex-wrap gap-2">
                     {scopes.hasEmail && (
                       <Badge variant="outline">Email</Badge>
@@ -210,6 +262,11 @@ export default function ProfilePage() {
                       <span className="text-sm text-muted-foreground">No permissions granted</span>
                     )}
                   </div>
+                  {scopes.tokenEmail && scopes.tokenStatus === 'ACTIVE' && (
+                    <p className="text-xs text-muted-foreground mt-2">
+                      Connected Gmail account: {scopes.tokenEmail}
+                    </p>
+                  )}
                 </div>
                 <div className="flex flex-col gap-2 sm:items-end">
                   <Button

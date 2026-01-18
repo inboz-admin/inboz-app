@@ -174,6 +174,29 @@ export class GmailService {
       };
     } catch (error) {
       const err = error as Error;
+      const errorMessage = err.message.toLowerCase();
+      
+      // Check if this is a refresh token failure (not just access token failure)
+      if (
+        errorMessage.includes('invalid_grant') ||
+        errorMessage.includes('invalid refresh token') ||
+        errorMessage.includes('refresh token expired') ||
+        errorMessage.includes('refresh token revoked') ||
+        errorMessage.includes('token has been expired or revoked') ||
+        (errorMessage.includes('invalid_request') && errorMessage.includes('refresh'))
+      ) {
+        this.logger.error(
+          `Refresh token is invalid/expired/revoked. User must re-authenticate: ${err.message}`,
+          err.stack,
+        );
+        // Create a specific error that indicates refresh token failure
+        const refreshTokenError = new Error(
+          `Refresh token invalid/expired/revoked: ${err.message}. User must re-authenticate.`,
+        );
+        refreshTokenError.name = 'RefreshTokenError';
+        throw refreshTokenError;
+      }
+      
       this.logger.error(`Failed to refresh access token: ${err.message}`, err.stack);
       throw error;
     }

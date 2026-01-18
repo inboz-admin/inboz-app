@@ -11,6 +11,7 @@
 
 export enum GmailErrorType {
   AUTH_ERROR = 'AUTH_ERROR',
+  REFRESH_TOKEN_ERROR = 'REFRESH_TOKEN_ERROR', // Refresh token itself is invalid/expired
   SCOPE_ERROR = 'SCOPE_ERROR',
   RATE_LIMIT_ERROR = 'RATE_LIMIT_ERROR',
   NETWORK_ERROR = 'NETWORK_ERROR',
@@ -33,7 +34,24 @@ export function classifyGmailError(error: Error | unknown): ClassifiedError {
   const errorMessage = err.message.toLowerCase();
   const errorStack = err.stack?.toLowerCase() || '';
 
-  // AUTH_ERROR: Invalid/expired token
+  // REFRESH_TOKEN_ERROR: Refresh token is invalid/expired/revoked (needs re-auth, don't retry)
+  if (
+    errorMessage.includes('invalid_grant') ||
+    errorMessage.includes('invalid refresh token') ||
+    errorMessage.includes('refresh token expired') ||
+    errorMessage.includes('refresh token revoked') ||
+    errorMessage.includes('token has been expired or revoked') ||
+    errorMessage.includes('invalid_request') && errorMessage.includes('refresh')
+  ) {
+    return {
+      type: GmailErrorType.REFRESH_TOKEN_ERROR,
+      message: err.message,
+      retryable: false, // Cannot retry - user must re-authenticate
+      originalError: err,
+    };
+  }
+
+  // AUTH_ERROR: Invalid/expired access token (can try refresh)
   if (
     errorMessage.includes('invalid authentication credentials') ||
     errorMessage.includes('invalid credentials') ||
@@ -154,6 +172,15 @@ export function requiresTokenRefresh(error: Error | unknown): boolean {
  */
 export function requiresReAuth(error: Error | unknown): boolean {
   const classified = classifyGmailError(error);
-  return classified.type === GmailErrorType.SCOPE_ERROR;
+  return classified.type === GmailErrorType.SCOPE_ERROR || 
+         classified.type === GmailErrorType.REFRESH_TOKEN_ERROR;
+}
+
+/**
+ * Check if an error indicates refresh token failure (user must re-authenticate)
+ */
+export function isRefreshTokenError(error: Error | unknown): boolean {
+  const classified = classifyGmailError(error);
+  return classified.type === GmailErrorType.REFRESH_TOKEN_ERROR;
 }
 

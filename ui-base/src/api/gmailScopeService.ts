@@ -13,6 +13,9 @@ export interface UserScopes {
   hasGmailReadonly: boolean;
   hasGmailSend: boolean;
   hasAllGmailScopes: boolean;
+  tokenStatus?: 'ACTIVE' | 'EXPIRED' | 'REVOKED' | 'INVALID';
+  tokenEmail?: string;
+  needsReAuth?: boolean;
 }
 
 /**

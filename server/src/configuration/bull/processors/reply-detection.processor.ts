@@ -6,7 +6,7 @@ import { GmailOAuthToken } from 'src/resources/users/entities/gmail-oauth-token.
 import { ReplyDetectionService } from 'src/common/services/reply-detection.service';
 import { TokenRefreshService } from 'src/common/services/token-refresh.service';
 import { CircuitBreakerService } from 'src/common/services/circuit-breaker.service';
-import { classifyGmailError, requiresTokenRefresh, requiresReAuth } from 'src/common/utils/gmail-error.util';
+import { classifyGmailError, requiresTokenRefresh, requiresReAuth, isRefreshTokenError } from 'src/common/utils/gmail-error.util';
 import { retryWithBackoff } from 'src/common/utils/retry.util';
 import { QueueName } from '../enums/queue.enum';
 
@@ -64,6 +64,21 @@ export class ReplyDetectionProcessor extends WorkerHost {
         );
       } catch (error) {
         const err = error as Error;
+        
+        // Check if refresh token itself is invalid (user must re-authenticate)
+        if (isRefreshTokenError(error)) {
+          this.logger.error(
+            `Refresh token is invalid for user ${userId} (${userEmail}). User must re-authenticate: ${err.message}`,
+          );
+          await this.circuitBreakerService.recordFailure(userId);
+          return { 
+            success: false, 
+            reason: 'Refresh token invalid - re-authentication required', 
+            found: 0, 
+            processed: 0 
+          };
+        }
+        
         this.logger.warn(
           `Failed to get valid access token for user ${userId}: ${err.message}`,
         );
@@ -95,6 +110,15 @@ export class ReplyDetectionProcessor extends WorkerHost {
               
               // If auth error, refresh token before retry (only once)
               if (requiresTokenRefresh(error) && !tokenRefreshed) {
+                // Check if refresh token itself is invalid - don't retry if so
+                if (isRefreshTokenError(error)) {
+                  this.logger.error(
+                    `Refresh token is invalid for user ${userId}. Stopping retries - user must re-authenticate.`,
+                  );
+                  // Re-throw to stop retries
+                  throw error;
+                }
+                
                 this.logger.log(
                   `Auth error detected, refreshing token for user ${userId} before retry`,
                 );
@@ -106,8 +130,19 @@ export class ReplyDetectionProcessor extends WorkerHost {
                   tokenRefreshed = true;
                   this.logger.log(`Token refreshed successfully for user ${userId}`);
                 } catch (refreshError) {
+                  const refreshErr = refreshError as Error;
+                  
+                  // Check if refresh token is invalid
+                  if (isRefreshTokenError(refreshError)) {
+                    this.logger.error(
+                      `Refresh token is invalid for user ${userId}. Stopping retries - user must re-authenticate: ${refreshErr.message}`,
+                    );
+                    // Re-throw to stop retries
+                    throw refreshError;
+                  }
+                  
                   this.logger.warn(
-                    `Token refresh failed for user ${userId}: ${(refreshError as Error).message}`,
+                    `Token refresh failed for user ${userId}: ${refreshErr.message}`,
                   );
                   // Continue with retry anyway - might work if token was just expired
                 }
@@ -132,6 +167,20 @@ export class ReplyDetectionProcessor extends WorkerHost {
           processed: result.processed,
         };
       } catch (error) {
+        // Check if refresh token is invalid - don't retry if so
+        if (isRefreshTokenError(error)) {
+          this.logger.error(
+            `Refresh token is invalid for user ${userId} (${userEmail}). User must re-authenticate. Stopping all retries.`,
+          );
+          await this.circuitBreakerService.recordFailure(userId);
+          return { 
+            success: false, 
+            reason: 'Refresh token invalid - re-authentication required', 
+            found: 0, 
+            processed: 0 
+          };
+        }
+        
         // If auth error after all retries, try one more time with forced refresh
         if (requiresTokenRefresh(error) && !tokenRefreshed) {
           this.logger.log(
@@ -163,6 +212,21 @@ export class ReplyDetectionProcessor extends WorkerHost {
             };
           } catch (refreshError) {
             const refreshErr = refreshError as Error;
+            
+            // Check if refresh token is invalid
+            if (isRefreshTokenError(refreshError)) {
+              this.logger.error(
+                `Refresh token is invalid for user ${userId} (${userEmail}). User must re-authenticate: ${refreshErr.message}`,
+              );
+              await this.circuitBreakerService.recordFailure(userId);
+              return { 
+                success: false, 
+                reason: 'Refresh token invalid - re-authentication required', 
+                found: 0, 
+                processed: 0 
+              };
+            }
+            
             this.logger.error(
               `Failed to refresh token or retry for user ${userId}: ${refreshErr.message}`,
             );
@@ -184,14 +248,24 @@ export class ReplyDetectionProcessor extends WorkerHost {
       await this.circuitBreakerService.recordFailure(userId);
 
       // Handle different error types
-      if (requiresReAuth(error)) {
+      if (isRefreshTokenError(error)) {
+        this.logger.error(
+          `Refresh token is invalid for user ${userId} (${userEmail}). User must re-authenticate: ${err.message}`,
+        );
+        return { 
+          success: false, 
+          reason: 'Refresh token invalid - re-authentication required', 
+          found: 0, 
+          processed: 0 
+        };
+      } else if (requiresReAuth(error)) {
         this.logger.warn(
-          `User ${userId} needs to re-authenticate: ${err.message}`,
+          `User ${userId} (${userEmail}) needs to re-authenticate: ${err.message}`,
         );
         return { success: false, reason: 'Re-authentication required', found: 0, processed: 0 };
       } else if (requiresTokenRefresh(error)) {
         this.logger.warn(
-          `Token refresh failed for user ${userId}: ${err.message}`,
+          `Token refresh failed for user ${userId} (${userEmail}): ${err.message}`,
         );
         return { success: false, reason: 'Token refresh failed', found: 0, processed: 0 };
       }

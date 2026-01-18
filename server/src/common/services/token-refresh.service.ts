@@ -4,6 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import { GmailOAuthToken, GmailTokenStatus } from 'src/resources/users/entities/gmail-oauth-token.entity';
 import { GmailService } from './gmail.service';
 import { CryptoUtilityService } from './crypto-utility.service';
+import { isRefreshTokenError } from '../utils/gmail-error.util';
 
 /**
  * Token Refresh Service
@@ -142,21 +143,41 @@ export class TokenRefreshService {
       return refreshed.accessToken;
     } catch (error) {
       const err = error as Error;
-      this.logger.error(
-        `Token refresh failed for user ${userId}: ${err.message}`,
-        err.stack,
-      );
+      
+      // Check if this is a refresh token failure (refresh token itself is invalid)
+      const isRefreshTokenFailure = isRefreshTokenError(error);
+      
+      if (isRefreshTokenFailure) {
+        this.logger.error(
+          `Refresh token is invalid/expired/revoked for user ${userId}. User must re-authenticate: ${err.message}`,
+          err.stack,
+        );
+      } else {
+        this.logger.error(
+          `Token refresh failed for user ${userId}: ${err.message}`,
+          err.stack,
+        );
+      }
 
-      // Mark token as invalid if refresh fails
+      // Mark token as invalid immediately when refresh fails
       try {
         await token.update({ status: GmailTokenStatus.INVALID });
         this.logger.warn(
-          `Marked token as INVALID for user ${userId} due to refresh failure`,
+          `Marked token as INVALID for user ${userId} due to refresh failure. User must re-authenticate.`,
         );
       } catch (updateError) {
         this.logger.error(
           `Failed to mark token as invalid: ${(updateError as Error).message}`,
         );
+      }
+
+      // Throw a specific error that indicates refresh token failure
+      if (isRefreshTokenFailure) {
+        const refreshTokenError = new Error(
+          `Refresh token invalid/expired/revoked for user ${userId}. User must re-authenticate.`,
+        );
+        refreshTokenError.name = 'RefreshTokenError';
+        throw refreshTokenError;
       }
 
       throw new Error(

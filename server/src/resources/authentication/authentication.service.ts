@@ -423,12 +423,16 @@ export class AuthenticationService {
     hasGmailReadonly: boolean;
     hasGmailSend: boolean;
     hasAllGmailScopes: boolean;
+    tokenStatus?: GmailTokenStatus;
+    tokenEmail?: string;
+    needsReAuth?: boolean;
   }> {
+    // Check for any token (not just ACTIVE) to get status
     const token = await GmailOAuthToken.findOne({
       where: {
         userId,
-        status: GmailTokenStatus.ACTIVE,
       },
+      order: [['createdAt', 'DESC']], // Get most recent token
     });
 
     if (!token) {
@@ -439,6 +443,61 @@ export class AuthenticationService {
         hasGmailReadonly: false,
         hasGmailSend: false,
         hasAllGmailScopes: false,
+        tokenStatus: undefined,
+        tokenEmail: undefined,
+        needsReAuth: true,
+      };
+    }
+
+    // Only need re-auth if refresh token is invalid/revoked (can't auto-refresh)
+    // EXPIRED status means access token expired but refresh token is still valid (can auto-refresh)
+    const needsReAuth = token.status === GmailTokenStatus.INVALID || 
+                        token.status === GmailTokenStatus.REVOKED;
+
+    // If refresh token is invalid/revoked, user must re-authenticate
+    if (needsReAuth) {
+      return {
+        scopes: token.scopes || [],
+        hasEmail: false,
+        hasProfile: false,
+        hasGmailReadonly: false,
+        hasGmailSend: false,
+        hasAllGmailScopes: false,
+        tokenStatus: token.status,
+        tokenEmail: token.email || undefined,
+        needsReAuth: true,
+      };
+    }
+
+    // If token is EXPIRED, it can still be auto-refreshed, so treat as active for UI
+    // The system will automatically refresh it when needed
+    if (token.status === GmailTokenStatus.EXPIRED) {
+      // Return scopes as if active - system will auto-refresh
+      const scopes = token.scopes || [];
+      const gmailReadonlyScope = 'https://www.googleapis.com/auth/gmail.readonly';
+      const gmailSendScope = 'https://www.googleapis.com/auth/gmail.send';
+      const emailScope = 'email';
+      const profileScope = 'profile';
+      const openidScope = 'openid';
+      const userinfoEmailScope = 'https://www.googleapis.com/auth/userinfo.email';
+      const userinfoProfileScope = 'https://www.googleapis.com/auth/userinfo.profile';
+
+      const hasEmail = scopes.includes(emailScope) || scopes.includes(userinfoEmailScope) || scopes.includes(openidScope);
+      const hasProfile = scopes.includes(profileScope) || scopes.includes(userinfoProfileScope) || scopes.includes(openidScope);
+      const hasGmailReadonly = scopes.includes(gmailReadonlyScope);
+      const hasGmailSend = scopes.includes(gmailSendScope);
+      const hasAllGmailScopes = hasGmailReadonly && hasGmailSend;
+
+      return {
+        scopes,
+        hasEmail,
+        hasProfile,
+        hasGmailReadonly,
+        hasGmailSend,
+        hasAllGmailScopes,
+        tokenStatus: GmailTokenStatus.ACTIVE, // Show as active since it can auto-refresh
+        tokenEmail: token.email || undefined,
+        needsReAuth: false,
       };
     }
 
@@ -464,6 +523,9 @@ export class AuthenticationService {
       hasGmailReadonly,
       hasGmailSend,
       hasAllGmailScopes,
+      tokenStatus: token.status,
+      tokenEmail: token.email || undefined,
+      needsReAuth: false,
     };
   }
 

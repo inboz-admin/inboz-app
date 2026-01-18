@@ -19,6 +19,7 @@ import { QuotaDatePicker } from "@/components/common/QuotaDatePicker";
 import { OrganizationSelector } from "@/components/common/OrganizationSelector";
 import { NotificationCenter } from "@/components/common/NotificationCenter";
 import { PushNotificationPrompt } from "@/components/common/PushNotificationPrompt";
+import { GmailTokenStatusBanner } from "@/components/auth/GmailTokenStatusBanner";
 import { useNotifications } from "@/hooks/useNotifications";
 import { useLocation, Outlet, Link, useParams } from "react-router-dom";
 import { useMemo } from "react";
@@ -154,6 +155,7 @@ export default function DashboardLayout() {
 
   return (
     <>
+      <GmailTokenStatusBanner />
       <SidebarProvider>
         <AppSidebar />
         <SidebarInset>
