@@ -402,46 +402,32 @@ export default function Landing() {
       description:
         "Track opens, clicks, and sales - not vanity metrics. Real-time performance dashboards with revenue attribution tracking and A/B testing built-in.",
     },
-    {
-      icon: TrendingUp,
-      title: "Higher Open Rates Guaranteed",
-      description:
-        "Our customers see average 30% higher open rates. Advanced deliverability optimization with send time optimization and subject line AI suggestions.",
-    },
   ];
 
   const testimonials = [
     {
-      result: "250%",
+      result: "Success",
       company: "Sarah Chen, E-commerce Director",
       description:
-        "Increased our email revenue by 250% in just 3 months. The automation features are game-changing.",
+        "Significantly increased our email revenue in just 3 months. The automation features are game-changing.",
       rating: "⭐⭐⭐⭐⭐",
       companyName: "GrowthCo",
     },
     {
-      result: "45%",
+      result: "Excellent",
       company: "Mark Rodriguez, Marketing Manager",
       description:
-        "Finally, an email tool that actually works. Our open rates went from 18% to 45%.",
+        "Finally, an email tool that actually works. Great results with our business communication.",
       rating: "⭐⭐⭐⭐⭐",
       companyName: "TechStart",
     },
     {
-      result: "300%",
+      result: "Outstanding",
       company: "Lisa Thompson, CEO",
       description:
-        "300% ROI increase in first 90 days. Best investment we've made in our marketing.",
+        "Significant ROI increase in first 90 days. Best investment we've made for our business communication.",
       rating: "⭐⭐⭐⭐⭐",
       companyName: "StartupX",
-    },
-    {
-      result: "99.9%",
-      company: "David Kim, CTO",
-      description:
-        "99.9% uptime guaranteed. Never worry about email delivery again.",
-      rating: "⭐⭐⭐⭐⭐",
-      companyName: "EcomPlus",
     },
   ];
 
@@ -555,12 +541,6 @@ export default function Landing() {
                   <AnimatedCounter value="50K+" />
                   <p className="text-sm text-muted-foreground mt-1">
                     Emails Sent
-                  </p>
-                </div>
-                <div className="text-center">
-                  <AnimatedCounter value="30%" />
-                  <p className="text-sm text-muted-foreground mt-1">
-                    Open Rate
                   </p>
                 </div>
               </motion.div>
@@ -718,10 +698,6 @@ export default function Landing() {
                 <div className="flex items-center gap-2">
                   <CheckCircle className="w-5 h-5 text-foreground" />
                   Enterprise-Grade Security
-                </div>
-                <div className="flex items-center gap-2">
-                  <CheckCircle className="w-5 h-5 text-foreground" />
-                  99.9% Uptime Guarantee
                 </div>
               </div>
               <div className="flex flex-wrap justify-center gap-6 mb-8 text-lg text-muted-foreground">
@@ -1141,24 +1117,6 @@ export default function Landing() {
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.8, delay: 0.4 }}
-            >
-              <Card className="border border-border shadow-sm">
-                <CardContent className="p-6">
-                  <h3 className="text-lg font-semibold mb-3 text-foreground">
-                    Do my emails actually reach the inbox?
-                  </h3>
-                  <p className="text-muted-foreground">
-                    Yes! We maintain 99%+ deliverability rates with dedicated IP
-                    warming and spam filter testing.
-                  </p>
-                </CardContent>
-              </Card>
-            </motion.div>
-
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.8, delay: 0.5 }}
             >
               <Card className="border border-border shadow-sm">
                 <CardContent className="p-6">
