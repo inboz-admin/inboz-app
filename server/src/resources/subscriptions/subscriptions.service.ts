@@ -720,7 +720,8 @@ export class SubscriptionsService extends BaseService<Subscription> {
 
   /**
    * Admin upgrade subscription - bypasses payment, creates subscription with zero invoice
-   * Cancels old subscription and creates new one with selected plan and user count for 1 month period
+   * Cancels old subscription and creates new one with selected plan and user count.
+   * Period length: 1 month for MONTHLY, 1 year for YEARLY billing cycle.
    */
   async adminUpgradeSubscription(
     dto: AdminUpgradeSubscriptionDto,
@@ -783,7 +784,10 @@ export class SubscriptionsService extends BaseService<Subscription> {
 
       const now = moment();
       const periodStart = now.toDate();
-      const periodEnd = moment(now).add(1, 'month').toDate();
+      const periodEnd = this.periodCalculationService.calculatePeriodEnd(
+        periodStart,
+        billingCycle,
+      );
 
       // Calculate pricing (for display purposes, but we'll set amount to 0)
       const pricingResult = await this.pricingCalculationService.calculateSubscriptionPrice(
