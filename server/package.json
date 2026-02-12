@@ -33,6 +33,7 @@
     "db:migrate:undo:all": "npx sequelize-cli db:migrate:undo:all",
     "db:seed": "npx sequelize-cli db:seed:all",
     "db:seed:undo:all": "npx sequelize-cli db:seed:undo:all",
+    "db:seed:assets": "npx sequelize-cli db:seed --seed 20260212000001-seed-assets-resource && npx sequelize-cli db:seed --seed 20260212000002-seed-assets-role-permissions",
     "db:reset": "npx sequelize-cli db:migrate:undo:all && npx sequelize-cli db:migrate && npx sequelize-cli db:seed:all",
     "db:test:migrate": "node scripts/test-db.js migrate",
     "db:test:migrate:undo:all": "node scripts/test-db.js migrate:undo:all",

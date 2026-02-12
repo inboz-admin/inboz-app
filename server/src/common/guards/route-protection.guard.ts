@@ -143,6 +143,7 @@ export class RouteProtectionGuard implements CanActivate {
       contacts: ResourceName.CONTACTS,
       'contact-lists': ResourceName.CONTACTLISTS,
       templates: ResourceName.TEMPLATES,
+      assets: ResourceName.ASSETS,
       campaigns: ResourceName.CAMPAIGNS,
       subscriptions: ResourceName.SUBSCRIPTIONS,
       invoices: ResourceName.INVOICES,

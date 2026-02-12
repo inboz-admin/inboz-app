@@ -15,6 +15,7 @@ import { PaymentsModule } from 'src/resources/payments/payments.module';
 import { AnalyticsModule } from 'src/resources/analytics/analytics.module';
 import { EmployeesModule } from 'src/resources/employees/employees.module';
 import { NotificationsModule } from 'src/resources/notifications/notifications.module';
+import { AssetsModule } from 'src/resources/assets/assets.module';
 
 export const routes: Routes = [
   {
@@ -79,6 +80,10 @@ export const routes: Routes = [
       {
         path: '/notifications',
         module: NotificationsModule,
+      },
+      {
+        path: '/assets',
+        module: AssetsModule,
       },
       {
         path: '/',

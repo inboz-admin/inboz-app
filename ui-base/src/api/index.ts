@@ -194,6 +194,14 @@ export type {
 
 // Email Template Service
 export { emailTemplateService } from "./emailTemplateService";
+
+// Upload Service
+export { uploadImage } from "./uploadService";
+export type { UploadedImage, UploadImageResponse } from "./uploadService";
+
+// Asset Service
+export { assetService } from "./assetService";
+export type { Asset, CreateAssetRequest, GetAssetsParams } from "./assetTypes";
 export type {
   EmailTemplate,
   CreateEmailTemplateDto,

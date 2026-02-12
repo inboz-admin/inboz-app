@@ -37,6 +37,7 @@ import { SubscriptionsModule } from './resources/subscriptions/subscriptions.mod
 import { AnalyticsModule } from './resources/analytics/analytics.module';
 import { EmployeesModule } from './resources/employees/employees.module';
 import { NotificationsModule } from './resources/notifications/notifications.module';
+import { AssetsModule } from './resources/assets/assets.module';
 
 @Module({
   imports: [
@@ -70,6 +71,7 @@ import { NotificationsModule } from './resources/notifications/notifications.mod
     AnalyticsModule,
     EmployeesModule,
     NotificationsModule,
+    AssetsModule,
     RouterModule.register(routes),
   ],
   controllers: [AppController],

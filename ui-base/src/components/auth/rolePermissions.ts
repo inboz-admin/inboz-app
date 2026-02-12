@@ -81,6 +81,11 @@ export const ROUTE_PERMISSIONS: RoutePermission[] = [
     description: "Email templates management - Superadmin, Admin, User, and Support",
   },
   {
+    path: "/dashboard/assets",
+    roles: ["SUPERADMIN", "ADMIN", "USER", "SUPPORT"],
+    description: "Assets (images/files) - Superadmin, Admin, User, and Support",
+  },
+  {
     path: "/dashboard/campaigns",
     roles: ["SUPERADMIN", "ADMIN", "USER", "SUPPORT"],
     description: "Email campaigns management - Superadmin, Admin, User, and Support",

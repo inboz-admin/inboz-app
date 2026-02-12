@@ -100,7 +100,9 @@ async function bootstrap() {
     }),
   );
 
-  app.useStaticAssets(join(__dirname, '..', 'public/browser'));
+  // Use process.cwd() for static assets so they work from any run path (dev/dist)
+  app.useStaticAssets(join(process.cwd(), 'public/browser'));
+  app.useStaticAssets(join(process.cwd(), 'uploads'), { prefix: '/uploads' });
 
   // Mount Bull Board
   app.use('/admin/queues', bullBoardService.getRouter());

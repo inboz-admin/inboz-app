@@ -12,13 +12,18 @@ import BulletList from '@tiptap/extension-bullet-list';
 import OrderedList from '@tiptap/extension-ordered-list';
 import ListItem from '@tiptap/extension-list-item';
 import Link from '@tiptap/extension-link';
+import Image from '@tiptap/extension-image';
 // These extensions are already included in StarterKit, so we don't need to import them separately
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { VariablePicker } from '@/pages/email-templates/VariablePicker';
+import { assetService } from '@/api/assetService';
+import type { Asset } from '@/api/assetTypes';
+import { toast } from 'sonner';
 import { 
   Bold, 
   Italic, 
@@ -35,7 +40,8 @@ import {
   Undo,
   Redo,
   Type,
-  Link as LinkIcon
+  Link as LinkIcon,
+  ImageIcon
 } from 'lucide-react';
 
 interface TiptapEditorProps {
@@ -54,6 +60,10 @@ export function TiptapEditor({
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
   const [linkUrl, setLinkUrl] = useState('');
   const [selectedText, setSelectedText] = useState<string>('');
+  const [imageDialogOpen, setImageDialogOpen] = useState(false);
+  const [imageUrl, setImageUrl] = useState('');
+  const [imageAssets, setImageAssets] = useState<Asset[]>([]);
+  const [imageAssetsLoading, setImageAssetsLoading] = useState(false);
   const isUserEditingRef = useRef(false);
   const lastUserContentRef = useRef<string>('');
   
@@ -95,6 +105,10 @@ export function TiptapEditor({
           target: '_blank',
           rel: 'noopener noreferrer',
         },
+      }),
+      Image.configure({
+        inline: false,
+        allowBase64: false,
       }),
       Placeholder.configure({
         placeholder,
@@ -148,6 +162,34 @@ export function TiptapEditor({
 
   const handleUnsetLink = () => {
     editor.chain().focus().unsetLink().run();
+  };
+
+  const handleInsertImage = () => {
+    if (imageUrl.trim()) {
+      editor.chain().focus().setImage({ src: imageUrl.trim() }).run();
+      setImageDialogOpen(false);
+      setImageUrl('');
+    }
+  };
+
+  useEffect(() => {
+    if (!imageDialogOpen) return;
+    setImageAssetsLoading(true);
+    assetService
+      .getAssets({ limit: 100, type: 'image' })
+      .then((res) => {
+        if (res.success && res.data?.data) setImageAssets(res.data.data);
+        else setImageAssets([]);
+      })
+      .catch(() => setImageAssets([]))
+      .finally(() => setImageAssetsLoading(false));
+  }, [imageDialogOpen]);
+
+  const copyAssetUrl = (url: string) => {
+    navigator.clipboard.writeText(url).then(
+      () => toast.success('URL copied to clipboard'),
+      () => toast.error('Failed to copy')
+    );
   };
 
   return (
@@ -358,6 +400,16 @@ export function TiptapEditor({
         >
           <Minus className="h-4 w-4" />
         </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="h-8 w-8 p-0"
+          onClick={() => setImageDialogOpen(true)}
+          title="Insert image"
+        >
+          <ImageIcon className="h-4 w-4" />
+        </Button>
 
         <div className="w-px h-6 bg-border mx-1" />
 
@@ -474,6 +526,94 @@ export function TiptapEditor({
             </Button>
             <Button onClick={handleSetLink} disabled={!linkUrl.trim()}>
               Add Link
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Image Dialog */}
+      <Dialog open={imageDialogOpen} onOpenChange={(open) => {
+        setImageDialogOpen(open);
+        if (!open) setImageUrl('');
+      }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Insert Image</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="image-url">Image URL</Label>
+              <Input
+                id="image-url"
+                placeholder="https://example.com/image.jpg or paste from your assets"
+                value={imageUrl}
+                onChange={(e) => setImageUrl(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    handleInsertImage();
+                  }
+                }}
+                autoFocus
+              />
+              <p className="text-xs text-muted-foreground">
+                Choose from your assets below or enter a URL.
+              </p>
+            </div>
+            {imageAssets.length > 0 && (
+              <div className="space-y-2">
+                <Label>Your assets</Label>
+                <ScrollArea className="h-[180px] rounded-md border border-border p-2">
+                  <div className="space-y-1">
+                    {imageAssets.map((asset) => (
+                      <div
+                        key={asset.id}
+                        className="flex items-center gap-2 rounded-md p-2 hover:bg-muted/50 group"
+                      >
+                        <button
+                          type="button"
+                          className="flex flex-1 min-w-0 items-center gap-2 text-left"
+                          onClick={() => setImageUrl(asset.url)}
+                        >
+                          <span className="flex-shrink-0 w-10 h-10 rounded overflow-hidden bg-muted flex items-center justify-center">
+                            <img
+                              src={asset.url}
+                              alt={asset.originalname}
+                              className="w-full h-full object-cover"
+                              onError={(e) => {
+                                e.currentTarget.style.display = 'none';
+                              }}
+                            />
+                          </span>
+                          <span className="text-sm truncate flex-1">{asset.originalname}</span>
+                        </button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="flex-shrink-0 h-8"
+                          onClick={() => copyAssetUrl(asset.url)}
+                        >
+                          Copy
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </ScrollArea>
+              </div>
+            )}
+            {imageAssetsLoading && imageAssets.length === 0 && (
+              <p className="text-xs text-muted-foreground">Loading your assets…</p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => {
+              setImageDialogOpen(false);
+              setImageUrl('');
+            }}>
+              Cancel
+            </Button>
+            <Button onClick={handleInsertImage} disabled={!imageUrl.trim()}>
+              Insert Image
             </Button>
           </DialogFooter>
         </DialogContent>

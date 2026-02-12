@@ -34,6 +34,7 @@ import { EmailTemplateBuilder } from "@/components/email-builder";
 import type { BuilderData } from "@/components/email-builder/types";
 import { htmlToBuilder } from "@/components/email-builder/utils/htmlToBuilder";
 import { builderToHtml } from "@/components/email-builder/utils/builderToHtml";
+import { API_CONFIG } from "@/config/constants";
 
 const emailTemplateSchema = z.object({
   name: z.string().min(1, "Title is required"),
@@ -81,6 +82,24 @@ const replaceVariables = (content: string, contactData: Record<string, string> =
 };
 
 /**
+ * Rewrite image URLs in HTML to use relative /uploads path so they load via Vite proxy (same origin).
+ * Fixes preview images not loading when URLs point to backend (e.g. localhost:4000) in dev.
+ */
+const rewritePreviewImageUrls = (html: string): string => {
+  const uploadBase = API_CONFIG.baseUrl.replace(/\/api\/v1\/?$/, "");
+  if (!uploadBase || !import.meta.env.DEV) return html;
+  // Only rewrite in dev when backend is on different origin (e.g. localhost:4000)
+  if (!uploadBase.includes("localhost") && !uploadBase.includes("127.0.0.1"))
+    return html;
+  const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const baseRegex = new RegExp(
+    escapeRegex(uploadBase) + "(/uploads/[^\"'\\s>]+)",
+    "gi"
+  );
+  return html.replace(baseRegex, "$1");
+};
+
+/**
  * Extract body content from full HTML document or return as-is if already just body content
  */
 const extractBodyContent = (html: string): string => {
@@ -102,7 +121,7 @@ const extractBodyContent = (html: string): string => {
  * Uses div instead of iframe for better theme integration
  */
 const EmailPreviewContent = ({ htmlContent }: { htmlContent: string }) => {
-  const content = extractBodyContent(htmlContent);
+  const content = rewritePreviewImageUrls(extractBodyContent(htmlContent));
 
   return (
     <>
@@ -306,7 +325,7 @@ export default function EmailTemplateModal({
       
       setSelectedSystemTemplateId(null);
       setUserManuallySetHtml(sendFormat === EmailSendFormat.HTML);
-      
+
       // Load builder data if exists - auto-enable builder mode
       if (hasBuilderData && designSettings) {
         setBuilderData(designSettings as BuilderData);
@@ -631,10 +650,10 @@ export default function EmailTemplateModal({
               </DialogDescription>
             </DialogHeader>
 
-            <div className="flex-1 flex overflow-hidden">
-          {/* Left Panel - 60% */}
-          <div className="w-[60%] flex flex-col p-6">
-            <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col h-full">
+            <div className="flex-1 flex min-h-0 overflow-hidden">
+          {/* Left Panel - 60% - scrollable */}
+          <div className="w-[60%] flex flex-col min-h-0 overflow-y-auto p-6">
+            <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col">
               {/* Predefined Style and Title - 2 Columns */}
               <div className={`grid gap-4 mb-4 ${!template && !isViewMode ? 'grid-cols-2' : 'grid-cols-1'}`}>
                 {!template && !isViewMode && (

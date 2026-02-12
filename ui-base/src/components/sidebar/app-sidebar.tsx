@@ -67,19 +67,24 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               location.pathname.startsWith("/dashboard/contacts") ||
               location.pathname.startsWith("/dashboard/contact-lists") ||
               location.pathname.startsWith("/dashboard/templates") ||
+              location.pathname.startsWith("/dashboard/assets") ||
               location.pathname.startsWith("/dashboard/campaigns"),
             items: [
               {
                 title: "Contacts",
                 url: "/dashboard/contacts",
-          },
-          {
+              },
+              {
                 title: "Contact Lists",
                 url: "/dashboard/contact-lists",
-          },
-          {
+              },
+              {
                 title: "Templates",
                 url: "/dashboard/templates",
+              },
+              {
+                title: "Assets",
+                url: "/dashboard/assets",
               },
               {
                 title: "Campaigns",
@@ -90,6 +95,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               "/dashboard/contacts",
               "/dashboard/contact-lists",
               "/dashboard/templates",
+              "/dashboard/assets",
               "/dashboard/campaigns",
             ],
           },
@@ -163,6 +169,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             location.pathname.startsWith("/dashboard/contacts") ||
             location.pathname.startsWith("/dashboard/contact-lists") ||
             location.pathname.startsWith("/dashboard/templates") ||
+            location.pathname.startsWith("/dashboard/assets") ||
             location.pathname.startsWith("/dashboard/campaigns"),
           items: [
             {
@@ -178,6 +185,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               url: "/dashboard/templates",
             },
             {
+              title: "Assets",
+              url: "/dashboard/assets",
+            },
+            {
               title: "Campaigns",
               url: "/dashboard/campaigns",
             },
@@ -186,6 +197,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             "/dashboard/contacts",
             "/dashboard/contact-lists",
             "/dashboard/templates",
+            "/dashboard/assets",
             "/dashboard/campaigns",
           ],
         },

@@ -19,6 +19,7 @@ import { EmailTrackingEvent } from 'src/resources/campaigns/entities/email-track
 import { Employee } from 'src/resources/employees/entities/employee.entity';
 import { Notification } from 'src/resources/notifications/entities/notification.entity';
 import { PushSubscription } from 'src/resources/notifications/entities/push-subscription.entity';
+import { Asset } from 'src/resources/assets/entities/asset.entity';
 
 @Global()
 @Module({
@@ -51,6 +52,7 @@ import { PushSubscription } from 'src/resources/notifications/entities/push-subs
           Employee,
           Notification,
           PushSubscription,
+          Asset,
         ], // Include all models here
         autoLoadModels: true, // Enable automatic model loading
         synchronize: true, // Enable table creation if they don't exist
@@ -81,6 +83,7 @@ import { PushSubscription } from 'src/resources/notifications/entities/push-subs
       Employee,
       Notification,
       PushSubscription,
+      Asset,
     ]), // Register all models here
   ],
   providers: [DatabaseService],

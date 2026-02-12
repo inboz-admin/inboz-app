@@ -28,6 +28,7 @@ import { SubscriptionsPage } from "@/pages/subscriptions";
 import SubscriptionDetailPage from "@/pages/subscriptions/SubscriptionDetailPage";
 import { InvoicesPage } from "@/pages/invoices";
 import { AnalyticsPage } from "@/pages/analytics";
+import { AssetsPage } from "@/pages/assets";
 import { TermsOfServicePage, PrivacyPolicyPage, SupportPage } from "@/pages/legal";
 import { ProtectedRouteWithRole } from "@/components/auth";
 import { ThemeProvider } from "@/components/providers";
@@ -114,6 +115,7 @@ function App() {
                 element={<ContactListDetailPage />}
               />
               <Route path="templates" element={<TemplateListPage />} />
+              <Route path="assets" element={<AssetsPage />} />
               <Route path="campaigns" element={<CampaignListPage />} />
               <Route path="campaigns/new" element={<CampaignBuilderPage />} />
               <Route path="campaigns/:id" element={<CampaignBuilderPage />} />

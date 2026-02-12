@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { BuilderElement, ElementType } from "./types";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,6 +11,15 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { VariablePicker } from "@/pages/email-templates/VariablePicker";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { ImageIcon } from "lucide-react";
+import { assetService } from "@/api/assetService";
+import type { Asset } from "@/api/assetTypes";
 
 interface ElementConfigPanelProps {
   element: BuilderElement | null;
@@ -36,36 +45,58 @@ export default function ElementConfigPanel({
   onUpdateElement,
   availableVariables = DEFAULT_VARIABLES,
 }: ElementConfigPanelProps) {
-  if (!element) {
-    return (
-      <div className="w-full h-full flex items-center justify-center p-8 text-center">
-        <div>
-          <p className="text-sm text-muted-foreground">No element selected</p>
-          <p className="text-xs text-muted-foreground mt-2">
-            Click on an element in the preview to configure it
-          </p>
-        </div>
-      </div>
-    );
-  }
+  const [assets, setAssets] = useState<Asset[]>([]);
 
+  useEffect(() => {
+    let cancelled = false;
+    assetService
+      .getAssets({ limit: 100, type: "image" })
+      .then((res) => {
+        if (cancelled || !res.success || !res.data?.data) return;
+        setAssets(res.data.data);
+      })
+      .catch(() => {
+        if (!cancelled) setAssets([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   const updateConfig = (updates: any) => {
+    if (!element) return;
     onUpdateElement({
       config: { ...element.config, ...updates },
     });
   };
 
   const updateCssConfig = (updates: any) => {
+    if (!element) return;
     onUpdateElement({
       cssConfig: { ...element.cssConfig, ...updates },
     });
   };
 
   const handleVariableInsert = (variable: string, field: 'content' | 'text') => {
+    if (!element) return;
     const currentValue = (element.config as any)[field] || '';
     const newValue = currentValue + `{{${variable}}}`;
     updateConfig({ [field]: newValue });
   };
+
+  // When no element selected
+  if (!element) {
+    return (
+      <div className="w-full h-full flex flex-col border-l border-border bg-background">
+        <div className="p-4 border-b border-border">
+          <h3 className="text-sm font-semibold">Configuration</h3>
+          <p className="text-xs text-muted-foreground mt-1">
+            Click on an element in the preview to configure it
+          </p>
+        </div>
+        <div className="flex-1 overflow-auto p-4" />
+      </div>
+    );
+  }
 
   return (
     <div className="w-full h-full flex flex-col border-l border-border bg-background">
@@ -148,11 +179,55 @@ export default function ElementConfigPanel({
               <>
                 <div className="space-y-2">
                   <Label>Image URL</Label>
-                  <Input
-                    value={(element.config as any).src || ''}
-                    onChange={(e) => updateConfig({ src: e.target.value })}
-                    placeholder="https://example.com/image.jpg"
-                  />
+                  <div className="flex gap-2">
+                    <Input
+                      value={(element.config as any).src || ''}
+                      onChange={(e) => updateConfig({ src: e.target.value })}
+                      placeholder="https://example.com/image.jpg"
+                      className="flex-1"
+                    />
+                    {assets.length > 0 && (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            title="Pick from your assets"
+                          >
+                            Use from assets
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="max-h-48 overflow-y-auto">
+                          {assets.map((img) => (
+                            <DropdownMenuItem
+                              key={img.id}
+                              onClick={() => updateConfig({ src: img.url })}
+                            >
+                              <span className="flex items-center gap-2 truncate max-w-[200px]">
+                                <span className="flex-shrink-0 w-8 h-8 rounded overflow-hidden bg-muted flex items-center justify-center relative">
+                                  <img
+                                    src={img.url}
+                                    alt={img.originalname}
+                                    className="w-full h-full object-cover"
+                                    onError={(e) => {
+                                      e.currentTarget.style.display = "none";
+                                      const fallback = e.currentTarget.parentElement?.querySelector("[data-img-fallback]");
+                                      fallback?.classList.remove("hidden");
+                                    }}
+                                  />
+                                  <span data-img-fallback className="absolute inset-0 flex items-center justify-center bg-muted hidden">
+                                    <ImageIcon className="h-4 w-4 text-muted-foreground" />
+                                  </span>
+                                </span>
+                                <span className="truncate">{img.originalname}</span>
+                              </span>
+                            </DropdownMenuItem>
+                          ))}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
+                  </div>
                 </div>
                 <div className="space-y-2">
                   <Label>Alt Text</Label>
@@ -1055,6 +1130,7 @@ export default function ElementConfigPanel({
               </div>
             </div>
           </TabsContent>
+
         </ScrollArea>
       </Tabs>
     </div>

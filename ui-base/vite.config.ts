@@ -16,6 +16,15 @@ export default defineConfig({
     hmr: {
       port: 3000,
     },
+    proxy: {
+      // Proxy uploads so preview images load from same origin (avoids CORS/mixed content)
+      "/uploads": {
+        target:
+          process.env.VITE_API_BASE_URL?.replace(/\/api\/v1\/?$/, "") ||
+          "http://localhost:4000",
+        changeOrigin: true,
+      },
+    },
   },
   build: {
     rollupOptions: {

@@ -86,6 +86,11 @@ export function NavMain({
                       ) {
                         isSubItemActive = true;
                       } else if (
+                        subItem.url === "/dashboard/assets" &&
+                        location.pathname.startsWith("/dashboard/assets")
+                      ) {
+                        isSubItemActive = true;
+                      } else if (
                         subItem.url === "/dashboard/campaigns" &&
                         location.pathname.startsWith("/dashboard/campaigns")
                       ) {
