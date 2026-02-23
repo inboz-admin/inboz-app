@@ -39,7 +39,7 @@ import {
 } from '@/components/ui/alert-dialog';
 
 export function CampaignBuilderPage() {
-  const [campaign, setCampaign] = useState<Partial<Campaign>>({ 
+  const [campaign, setCampaign] = useState<Partial<Campaign>>({
     status: 'DRAFT',
     openTracking: true,
     clickTracking: true,
@@ -106,9 +106,9 @@ export function CampaignBuilderPage() {
   // Function to load queued emails for each step
   const loadStepQueuedEmails = useCallback(async () => {
     if (!campaign?.id || !steps.length) return;
-    
+
     const stepEmailsMap: Record<string, Array<{ scheduledSendAt?: string | null }>> = {};
-    
+
     // Fetch queued emails for each step
     await Promise.all(
       steps.map(async (step) => {
@@ -116,7 +116,7 @@ export function CampaignBuilderPage() {
           const emails = await CampaignsApi.getStepEmails(campaign.id!, step.id);
           const emailList = Array.isArray(emails?.data || emails) ? (emails?.data || emails) : [];
           // Filter only QUEUED or SENDING emails
-          const queuedEmails = emailList.filter((email: any) => 
+          const queuedEmails = emailList.filter((email: any) =>
             email.status === 'QUEUED' || email.status === 'SENDING'
           );
           stepEmailsMap[step.id] = queuedEmails;
@@ -126,7 +126,7 @@ export function CampaignBuilderPage() {
         }
       })
     );
-    
+
     setStepQueuedEmails(stepEmailsMap);
   }, [campaign?.id, steps]);
 
@@ -151,7 +151,7 @@ export function CampaignBuilderPage() {
           const sts = ((c as any)?.steps || []) as CampaignStep[];
           const filteredSteps = sts.filter(s => s && s.id);
           setSteps(filteredSteps); // Filter out any null/undefined steps
-          
+
           // Load queued emails if campaign is active
           if (c.status === 'ACTIVE' && c.id && filteredSteps.length > 0) {
             // Set campaign and steps first, then load emails after a short delay
@@ -174,27 +174,27 @@ export function CampaignBuilderPage() {
     // For employees: use selectedOrganizationId from store (can be null - apiService handles it)
     // For regular users: use organizationId from user object
     const orgId = isEmployee ? selectedOrganizationId : user?.organizationId;
-    
+
     // Load templates and contact lists if we have an organizationId
     // For employees, apiService will automatically add organizationId from store
     if (orgId || isEmployee) {
-      const templateParams = isEmployee 
-        ? { page: 1, limit: 100 } 
+      const templateParams = isEmployee
+        ? { page: 1, limit: 100 }
         : { organizationId: orgId || undefined, page: 1, limit: 100 };
       emailTemplateService.getTemplates(templateParams).then((r: any) => {
         const arr = (r?.data ?? []) as any[];
         setTemplates(arr.map((t: any) => ({ id: t.id, name: t.name })));
       }).catch(() => setTemplates([]));
-      
-      const listParams = isEmployee 
-        ? { page: 1, limit: 100 } 
+
+      const listParams = isEmployee
+        ? { page: 1, limit: 100 }
         : { organizationId: orgId || undefined, page: 1, limit: 100 };
       contactListService.getContactLists(listParams).then((r: any) => {
         const arr = (r?.data?.data ?? r?.data ?? []) as any[];
         setLists(arr.map((l: any) => ({ id: l.id, name: l.name, contactCount: l.contactCount || 0 })));
       }).catch(() => setLists([]));
     }
-    
+
     // Load campaign if we have an id
     // For employees: don't require organizationId (apiService will handle it)
     // For regular users: require organizationId
@@ -232,13 +232,13 @@ export function CampaignBuilderPage() {
 
   const onSave = async () => {
     if (!canSave) return;
-    
+
     // Validate custom unsubscribe message if reply unsubscribe is enabled
     if (campaign.unsubscribeReplyEnabled && !campaign.unsubscribeCustomMessage?.trim()) {
       toast.error('Custom unsubscribe message is required when custom reply unsubscribe is enabled');
       return;
     }
-    
+
     setSaving(true);
     try {
       if (campaign.id) {
@@ -252,9 +252,9 @@ export function CampaignBuilderPage() {
           unsubscribeReplyEnabled: campaign.unsubscribeReplyEnabled ?? false,
           unsubscribeCustomMessage: campaign.unsubscribeCustomMessage || null,
         } as any;
-        
+
         const updated = await CampaignsApi.update(campaign.id, updatePayload);
-        
+
         // Ensure all settings are properly set with latest data from server
         const campaignData = {
           ...updated,
@@ -280,7 +280,7 @@ export function CampaignBuilderPage() {
       }
     } catch (error: any) {
       console.error('Error saving campaign:', error);
-      
+
       // Handle 409 Conflict errors (duplicate campaign name)
       if (error?.statusCode === 409 || error?.error?.code === 'CONFLICT') {
         const errorMessage = error?.message || error?.error?.details?.message || 'A campaign with this name already exists in your organization';
@@ -296,22 +296,22 @@ export function CampaignBuilderPage() {
 
   const checkQuotaAndActivate = async () => {
     if (!campaign?.id || !user?.id) return;
-    
+
     try {
       setPendingActivation(false);
       setQuotaDialogOpen(false);
-      
+
       // Activate a DRAFT campaign (creates jobs in queue) - always use auto-spread mode
       console.log('🟢 Activating campaign with auto-spread mode');
       await CampaignsApi.activate(campaign.id, 'auto-spread');
       console.log('✅ Campaign activated');
-      
+
       // Refresh campaign detail page to get all updated data (status, steps, quota distribution, etc.)
       // Small delay to ensure backend has processed the activation
       setTimeout(async () => {
         await loadCampaign();
       }, 500);
-      
+
       toast.success(`Campaign "${campaign.name}" activated! Emails are being queued...`);
     } catch (error: any) {
       console.error('❌ Error activating campaign:', error);
@@ -325,19 +325,19 @@ export function CampaignBuilderPage() {
 
   const toggleActive = async (checked: boolean) => {
     if (!campaign?.id) return;
-    
-    console.log('🔄 toggleActive called:', { 
-      checked, 
+
+    console.log('🔄 toggleActive called:', {
+      checked,
       currentStatus: campaign.status,
-      campaignId: campaign.id 
+      campaignId: campaign.id
     });
-    
+
     // Don't allow toggling completed campaigns
     if (campaign.status === 'COMPLETED') {
       toast.error('Cannot activate a completed campaign');
       return;
     }
-    
+
     try {
       let updated;
       if (checked) {
@@ -347,7 +347,7 @@ export function CampaignBuilderPage() {
           console.log('▶️ Resuming campaign...');
           updated = await CampaignsApi.resume(campaign.id);
           console.log('✅ Campaign resumed:', updated);
-          
+
           // Check if there are overdue scheduled steps
           const overdueStepsData = (updated as any)?.overdueSteps;
           if (overdueStepsData && overdueStepsData.length > 0) {
@@ -367,7 +367,7 @@ export function CampaignBuilderPage() {
           const scheduledSteps = steps.filter(
             step => step.triggerType === 'SCHEDULE' && step.scheduleTime
           );
-          
+
           // Find the earliest scheduled date (if any scheduled steps exist)
           let targetDate: Date | undefined = undefined;
           if (scheduledSteps.length > 0) {
@@ -375,11 +375,11 @@ export function CampaignBuilderPage() {
               .map(step => new Date(step.scheduleTime!))
               .filter(date => !isNaN(date.getTime()))
               .sort((a, b) => a.getTime() - b.getTime());
-            
+
             if (scheduledDates.length > 0) {
               // Use the earliest scheduled date
               targetDate = scheduledDates[0];
-              
+
               // Extract date components and create UTC date at midnight for quota check
               const year = targetDate.getUTCFullYear();
               const month = targetDate.getUTCMonth();
@@ -393,10 +393,10 @@ export function CampaignBuilderPage() {
             const quotaResponse = await userService.getQuotaStats(user.id, targetDate);
             if (quotaResponse.success && quotaResponse.data) {
               const stats = quotaResponse.data;
-              
+
               // Calculate total emails needed
               const totalEmails = (campaign.totalRecipients || 0) * steps.length;
-              
+
               // Check if quota might be insufficient
               if (totalEmails > stats.remaining) {
                 // Show quota dialog with target date info
@@ -413,7 +413,7 @@ export function CampaignBuilderPage() {
             console.warn('Could not fetch quota stats, proceeding with activation:', quotaError);
             // Continue with activation if quota check fails
           }
-          
+
           // Proceed with activation (quota sufficient or check failed)
           await checkQuotaAndActivate();
           return;
@@ -430,7 +430,7 @@ export function CampaignBuilderPage() {
           return;
         }
       }
-      
+
       // Update the campaign status
       setCampaign((prev) => ({ ...prev, ...updated }));
       // Refresh steps to get updated progress
@@ -464,7 +464,7 @@ export function CampaignBuilderPage() {
 
   const handleSaveStep = async (stepData: Partial<CampaignStep>) => {
     if (!campaign.id || !campaign.organizationId) return;
-    
+
     try {
       // Check quota before adding step to active campaign
       if (!editingStep?.id && campaign.status === 'ACTIVE' && user?.id && campaign.totalRecipients) {
@@ -473,17 +473,17 @@ export function CampaignBuilderPage() {
           const targetDate = stepData.triggerType === 'SCHEDULE' && stepData.scheduleTime
             ? new Date(stepData.scheduleTime)
             : undefined;
-          
+
           const quotaResponse = await userService.getQuotaStats(user.id, targetDate);
           if (quotaResponse.success && quotaResponse.data) {
             const stats = quotaResponse.data;
             const emailsForNewStep = campaign.totalRecipients;
             const totalEmailsWithNewStep = campaign.totalRecipients * (steps.length + 1);
-            
+
             // Show warning modal if quota is insufficient
             if (emailsForNewStep > stats.remaining || totalEmailsWithNewStep > stats.remaining) {
               const estimatedDays = Math.max(1, Math.ceil((totalEmailsWithNewStep - stats.remaining) / stats.limit));
-              
+
               // Store step data and quota info, then show warning dialog
               setPendingStepData(stepData);
               setQuotaWarningStats({
@@ -502,23 +502,23 @@ export function CampaignBuilderPage() {
           // Continue with step addition even if quota check fails
         }
       }
-      
+
       // Proceed with step addition
       await addStepInternal(stepData);
     } catch (err: any) {
       console.error('Error saving step:', err);
-      
+
       // Handle 409 Conflict errors (duplicate step name)
       if (err?.statusCode === 409 || err?.error?.code === 'CONFLICT') {
         const errorMessage = err?.message || err?.error?.details?.message || 'A sequence with this name already exists in this campaign';
         toast.error(errorMessage);
       } else {
         // Extract error message from various error formats for other errors
-        const errorMessage = 
+        const errorMessage =
           err?.response?.data?.message ||
           err?.message ||
           'Failed to save sequence. Please try again.';
-        
+
         toast.error(errorMessage);
       }
     }
@@ -526,7 +526,7 @@ export function CampaignBuilderPage() {
 
   const addStepInternal = async (stepData: Partial<CampaignStep>) => {
     if (!campaign.id || !campaign.organizationId) return;
-    
+
     try {
       let result;
       if (editingStep?.id) {
@@ -539,7 +539,7 @@ export function CampaignBuilderPage() {
           ...stepData,
         } as any);
       }
-      
+
       // Check if result indicates an error (NestJS returns { success: false, statusCode, message })
       if (result && (result.statusCode >= 400 || result.success === false)) {
         // Handle 409 Conflict errors (duplicate step name)
@@ -552,18 +552,18 @@ export function CampaignBuilderPage() {
         }
         return;
       }
-      
+
       setStepModalOpen(false);
       setEditingStep(null);
       setPendingStepData(null);
-      
+
       // Show success message
       if (editingStep?.id) {
         toast.success('Step updated successfully');
       } else {
         toast.success('Step added successfully');
       }
-      
+
       // Fetch campaign details after toast to get latest data (scheduled emails, etc.)
       // Small delay to ensure backend has processed the step addition
       setTimeout(async () => {
@@ -571,19 +571,19 @@ export function CampaignBuilderPage() {
       }, 500);
     } catch (err: any) {
       console.error('Error saving step:', err);
-      
+
       // Handle 409 Conflict errors (duplicate step name)
       if (err?.statusCode === 409 || err?.error?.code === 'CONFLICT') {
         const errorMessage = err?.message || err?.error?.details?.message || 'A sequence with this name already exists in this campaign';
         toast.error(errorMessage);
       } else {
         // Try multiple ways to extract error message for other errors
-        const errorMessage = 
+        const errorMessage =
           err?.response?.data?.message ||
           err?.response?.message ||
           err?.message ||
           (typeof err === 'string' ? err : 'Failed to save step. Please try again.');
-        
+
         toast.error(errorMessage);
       }
     }
@@ -620,10 +620,10 @@ export function CampaignBuilderPage() {
 
   const handleConfirmDeleteStep = async () => {
     if (!campaign.id || !stepToDelete) return;
-    
+
     try {
       const response = await CampaignsApi.deleteStep(campaign.id, stepToDelete.id);
-      
+
       if (response?.success) {
         toast.success('Step deleted successfully');
         // Refresh the campaign to get updated steps
@@ -660,13 +660,13 @@ export function CampaignBuilderPage() {
     try {
       const date = new Date(step.scheduleTime);
       if (isNaN(date.getTime())) return step.scheduleTime;
-      return date.toLocaleString('en-US', { 
-        month: 'short', 
-        day: 'numeric', 
+      return date.toLocaleString('en-US', {
+        month: 'short',
+        day: 'numeric',
         year: 'numeric',
-        hour: 'numeric', 
+        hour: 'numeric',
         minute: '2-digit',
-        hour12: true 
+        hour12: true
       });
     } catch {
       return step.scheduleTime || '-';
@@ -683,18 +683,18 @@ export function CampaignBuilderPage() {
 
   // Check if a step has been processed (has emails created)
   const stepHasBeenProcessed = (step: CampaignStep): boolean => {
-    return (step.emailsSent ?? 0) > 0 || 
-           (step.emailsQueued ?? 0) > 0 || 
-           (step.totalExpected ?? 0) > 0;
+    return (step.emailsSent ?? 0) > 0 ||
+      (step.emailsQueued ?? 0) > 0 ||
+      (step.totalExpected ?? 0) > 0;
   };
 
   // Check if a step can be edited (scheduled steps that haven't started can be edited even when ACTIVE)
   const canEditStep = (step: CampaignStep): boolean => {
     if (campaign.status !== 'ACTIVE') return true;
-    
+
     // Check if step has been processed
     const hasBeenProcessed = stepHasBeenProcessed(step);
-    
+
     // Allow editing scheduled steps that haven't been processed yet
     const isScheduledStep = step.triggerType === 'SCHEDULE';
     return isScheduledStep && !hasBeenProcessed;
@@ -739,17 +739,17 @@ export function CampaignBuilderPage() {
           <div className="flex gap-4 items-end">
             <div className="space-y-2 flex-1">
               <Label>Campaign Name *</Label>
-              <Input 
-                placeholder="Campaign name" 
-                value={campaign.name || ''} 
-                onChange={(e) => setCampaign({ ...campaign, name: e.target.value })} 
+              <Input
+                placeholder="Campaign name"
+                value={campaign.name || ''}
+                onChange={(e) => setCampaign({ ...campaign, name: e.target.value })}
                 disabled={isViewMode}
               />
             </div>
             <div className="space-y-2 flex-1">
               <Label>Contact List *</Label>
-              <Select 
-                value={(campaign as any).contactListId || ''} 
+              <Select
+                value={(campaign as any).contactListId || ''}
                 onValueChange={(v) => setCampaign({ ...campaign, contactListId: v as any })}
                 disabled={!!campaign.id || isViewMode}
               >
@@ -778,28 +778,28 @@ export function CampaignBuilderPage() {
             {campaign.id && (
               <>
                 <div className="flex items-center gap-2 px-3 py-2 border rounded-md">
-                  <Switch 
-                    checked={campaign.status === 'ACTIVE'} 
-                    onCheckedChange={toggleActive} 
+                  <Switch
+                    checked={campaign.status === 'ACTIVE'}
+                    onCheckedChange={toggleActive}
                     disabled={campaign.status === 'COMPLETED' || steps.length === 0 || isViewMode}
                     title={
                       isViewMode
                         ? 'View mode - actions disabled'
-                        : campaign.status === 'COMPLETED' 
-                        ? 'Campaign completed - cannot be reactivated' 
-                        : steps.length === 0 
-                        ? 'Add steps before activating campaign'
-                        : undefined
+                        : campaign.status === 'COMPLETED'
+                          ? 'Campaign completed - cannot be reactivated'
+                          : steps.length === 0
+                            ? 'Add steps before activating campaign'
+                            : undefined
                     }
                   />
                   <span className="text-sm text-muted-foreground whitespace-nowrap">
-                    {campaign?.status === 'COMPLETED' 
-                      ? 'Completed' 
-                      : campaign?.status === 'ACTIVE' 
-                      ? 'Active' 
-                      : campaign?.status === 'PAUSED'
-                      ? 'Paused'
-                      : 'Draft'}
+                    {campaign?.status === 'COMPLETED'
+                      ? 'Completed'
+                      : campaign?.status === 'ACTIVE'
+                        ? 'Active'
+                        : campaign?.status === 'PAUSED'
+                          ? 'Paused'
+                          : 'Draft'}
                   </span>
                   {/* Live indicator when receiving real-time updates */}
                   {isActive && isConnected && (
@@ -879,8 +879,8 @@ export function CampaignBuilderPage() {
                           <Switch
                             checked={campaign.unsubscribeReplyEnabled ?? false}
                             onCheckedChange={(checked) => {
-                              setCampaign({ 
-                                ...campaign, 
+                              setCampaign({
+                                ...campaign,
                                 unsubscribeReplyEnabled: checked,
                                 // Clear custom message if disabling
                                 unsubscribeCustomMessage: checked ? campaign.unsubscribeCustomMessage : undefined
@@ -1010,7 +1010,7 @@ export function CampaignBuilderPage() {
                                 const replyToStep = steps.find((s: any) => s?.id === (step as any).replyToStepId);
                                 const replyType = (step as any).replyType;
                                 // Show the step name (or stepOrder as fallback if no name)
-                                const replyStepName = replyToStep 
+                                const replyStepName = replyToStep
                                   ? (replyToStep.name || `Sequence ${replyToStep.stepOrder ?? steps.findIndex((s: any) => s?.id === replyToStep.id) + 1}`)
                                   : '?';
                                 return (
@@ -1019,7 +1019,7 @@ export function CampaignBuilderPage() {
                                     Follow up to {replyStepName}
                                     {replyType && (
                                       <span className="ml-1 text-muted-foreground">
-                                        ({replyType === 'OPENED' ? 'Opened' : 'Clicked'})
+                                        ({replyType === 'OPENED' ? 'Opened' : replyType === 'CLICKED' ? 'Clicked' : 'Sent'})
                                       </span>
                                     )}
                                   </Badge>
@@ -1038,7 +1038,7 @@ export function CampaignBuilderPage() {
                                 // 1. Step has emails (total > 0), OR
                                 // 2. Step is a reply step that was processed but had 0 contacts (totalExpected is explicitly 0, not undefined)
                                 const isProcessedReplyStepWithZeroEmails = (step as any).replyToStepId && (step as any).totalExpected === 0;
-                                
+
                                 if (progress.total > 0 || isProcessedReplyStepWithZeroEmails) {
                                   // If step has 0/0 emails, show "NA" instead of percentage
                                   if (progress.total === 0 && progress.sent === 0) {
@@ -1053,7 +1053,7 @@ export function CampaignBuilderPage() {
                                       </div>
                                     );
                                   }
-                                  
+
                                   return (
                                     <div className="flex items-center gap-2">
                                       <Badge variant={progress.pct >= 100 ? "default" : "secondary"} className="text-xs">
@@ -1102,7 +1102,7 @@ export function CampaignBuilderPage() {
                                 </Button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end">
-                                <DropdownMenuItem 
+                                <DropdownMenuItem
                                   onClick={() => {
                                     setEditingStep(step);
                                     setIsViewingStep(true);
@@ -1113,7 +1113,7 @@ export function CampaignBuilderPage() {
                                 </DropdownMenuItem>
                                 {!isViewMode && (
                                   <>
-                                    <DropdownMenuItem 
+                                    <DropdownMenuItem
                                       onClick={() => handleEditStep(step)}
                                       disabled={!canEditStep(step)}
                                       title={(() => {
@@ -1165,9 +1165,9 @@ export function CampaignBuilderPage() {
 
       <StepModal
         open={stepModalOpen}
-        onClose={() => { 
-          setStepModalOpen(false); 
-          setEditingStep(null); 
+        onClose={() => {
+          setStepModalOpen(false);
+          setEditingStep(null);
           setIsViewingStep(false);
         }}
         onSave={handleSaveStep}
@@ -1178,82 +1178,94 @@ export function CampaignBuilderPage() {
         readOnly={isViewingStep}
       />
 
-      {campaign.id && emailModalStepId && (
-        <EmailMessagesModal
-          open={emailModalOpen}
-          onClose={() => {
-            setEmailModalOpen(false);
-            setEmailModalStepId(null);
-            setEmailModalEventType(undefined);
-          }}
-          campaignId={campaign.id}
-          stepId={emailModalStepId}
-          eventType={emailModalEventType}
-          stepName={steps.find(s => s.id === emailModalStepId)?.name || undefined}
-        />
-      )}
+      {
+        campaign.id && emailModalStepId && (
+          <EmailMessagesModal
+            open={emailModalOpen}
+            onClose={() => {
+              setEmailModalOpen(false);
+              setEmailModalStepId(null);
+              setEmailModalEventType(undefined);
+            }}
+            campaignId={campaign.id}
+            stepId={emailModalStepId}
+            eventType={emailModalEventType}
+            stepName={steps.find(s => s.id === emailModalStepId)?.name || undefined}
+          />
+        )
+      }
 
-      {campaign.id && (
-        <CampaignMetricsModal
-          open={metricsModalOpen}
-          onClose={() => setMetricsModalOpen(false)}
-          campaign={campaign as Campaign}
-        />
-      )}
+      {
+        campaign.id && (
+          <CampaignMetricsModal
+            open={metricsModalOpen}
+            onClose={() => setMetricsModalOpen(false)}
+            campaign={campaign as Campaign}
+          />
+        )
+      }
 
-      {quotaStats && quotaDialogOpen && (
-        <QuotaModeSelectionDialog
-          isOpen={quotaDialogOpen}
-          onOpenChange={setQuotaDialogOpen}
-          onConfirm={checkQuotaAndActivate}
-          onCancel={() => {
-            setQuotaDialogOpen(false);
-            setPendingActivation(false);
-            setQuotaStats(null);
-          }}
-          quotaStats={quotaStats}
-          totalEmails={(campaign.totalRecipients || 0) * steps.length}
-          estimatedDays={quotaStats ? Math.max(1, Math.ceil(((campaign.totalRecipients || 0) * steps.length - quotaStats.remaining) / quotaStats.limit)) : 1}
-        />
-      )}
+      {
+        quotaStats && quotaDialogOpen && (
+          <QuotaModeSelectionDialog
+            isOpen={quotaDialogOpen}
+            onOpenChange={setQuotaDialogOpen}
+            onConfirm={checkQuotaAndActivate}
+            onCancel={() => {
+              setQuotaDialogOpen(false);
+              setPendingActivation(false);
+              setQuotaStats(null);
+            }}
+            quotaStats={quotaStats}
+            totalEmails={(campaign.totalRecipients || 0) * steps.length}
+            estimatedDays={quotaStats ? Math.max(1, Math.ceil(((campaign.totalRecipients || 0) * steps.length - quotaStats.remaining) / quotaStats.limit)) : 1}
+          />
+        )
+      }
 
-      {campaign.id && (
-        <CampaignMetricsModal
-          open={metricsModalOpen}
-          onClose={() => setMetricsModalOpen(false)}
-          campaign={campaign as Campaign}
-        />
-      )}
+      {
+        campaign.id && (
+          <CampaignMetricsModal
+            open={metricsModalOpen}
+            onClose={() => setMetricsModalOpen(false)}
+            campaign={campaign as Campaign}
+          />
+        )
+      }
 
-      {quotaStats && quotaDialogOpen && (
-        <QuotaModeSelectionDialog
-          isOpen={quotaDialogOpen}
-          onOpenChange={setQuotaDialogOpen}
-          onConfirm={checkQuotaAndActivate}
-          onCancel={() => {
-            setQuotaDialogOpen(false);
-            setPendingActivation(false);
-            setQuotaStats(null);
-          }}
-          quotaStats={quotaStats}
-          totalEmails={(campaign.totalRecipients || 0) * steps.length}
-          estimatedDays={quotaStats ? Math.max(1, Math.ceil(((campaign.totalRecipients || 0) * steps.length - quotaStats.remaining) / quotaStats.limit)) : 1}
-        />
-      )}
+      {
+        quotaStats && quotaDialogOpen && (
+          <QuotaModeSelectionDialog
+            isOpen={quotaDialogOpen}
+            onOpenChange={setQuotaDialogOpen}
+            onConfirm={checkQuotaAndActivate}
+            onCancel={() => {
+              setQuotaDialogOpen(false);
+              setPendingActivation(false);
+              setQuotaStats(null);
+            }}
+            quotaStats={quotaStats}
+            totalEmails={(campaign.totalRecipients || 0) * steps.length}
+            estimatedDays={quotaStats ? Math.max(1, Math.ceil(((campaign.totalRecipients || 0) * steps.length - quotaStats.remaining) / quotaStats.limit)) : 1}
+          />
+        )
+      }
 
-      {quotaWarningStats && quotaWarningDialogOpen && (
-        <QuotaWarningDialog
-          isOpen={quotaWarningDialogOpen}
-          onOpenChange={setQuotaWarningDialogOpen}
-          onConfirm={handleConfirmQuotaWarning}
-          onCancel={handleCancelQuotaWarning}
-          quotaStats={quotaWarningStats.stats}
-          emailsForNewStep={quotaWarningStats.emailsForNewStep}
-          totalEmailsWithNewStep={quotaWarningStats.totalEmailsWithNewStep}
-          estimatedDays={quotaWarningStats.estimatedDays}
-          targetDate={quotaWarningStats.targetDate}
-        />
-      )}
+      {
+        quotaWarningStats && quotaWarningDialogOpen && (
+          <QuotaWarningDialog
+            isOpen={quotaWarningDialogOpen}
+            onOpenChange={setQuotaWarningDialogOpen}
+            onConfirm={handleConfirmQuotaWarning}
+            onCancel={handleCancelQuotaWarning}
+            quotaStats={quotaWarningStats.stats}
+            emailsForNewStep={quotaWarningStats.emailsForNewStep}
+            totalEmailsWithNewStep={quotaWarningStats.totalEmailsWithNewStep}
+            estimatedDays={quotaWarningStats.estimatedDays}
+            targetDate={quotaWarningStats.targetDate}
+          />
+        )
+      }
 
       <ConfirmDeleteDialog
         isOpen={isDeleteStepDialogOpen}
@@ -1300,6 +1312,6 @@ export function CampaignBuilderPage() {
         </AlertDialogContent>
       </AlertDialog>
 
-    </div>
+    </div >
   );
 }

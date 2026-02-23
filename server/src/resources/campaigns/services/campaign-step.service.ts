@@ -63,7 +63,7 @@ export class CampaignStepService implements ICampaignStepService {
     private readonly campaignContactService: CampaignContactService,
     private readonly campaignQuotaService: CampaignQuotaService,
     private readonly campaignStepQueueService: CampaignStepQueueService,
-  ) {}
+  ) { }
 
   // Adds a new step to a campaign with validation, auto-activates COMPLETED campaigns, and queues steps for active campaigns
   async add(dto: CreateStepDto): Promise<CampaignStep> {
@@ -115,7 +115,7 @@ export class CampaignStepService implements ICampaignStepService {
             );
           this.logger.log(
             `Contact list ${campaign.contactListId} has ${subscribedCount} subscribed contact(s) ` +
-              `(excluding contacts who unsubscribed or bounced in any step of this campaign)`,
+            `(excluding contacts who unsubscribed or bounced in any step of this campaign)`,
           );
         } else {
           // For DRAFT/PAUSED/COMPLETED, use regular count
@@ -128,7 +128,7 @@ export class CampaignStepService implements ICampaignStepService {
         if (subscribedCount === 0) {
           throw new BadRequestException(
             `Cannot add step. Contact list has no subscribed contacts. ` +
-              `Please add subscribed contacts to the contact list before adding steps to active/completed campaigns.`,
+            `Please add subscribed contacts to the contact list before adding steps to active/completed campaigns.`,
           );
         }
 
@@ -201,21 +201,21 @@ export class CampaignStepService implements ICampaignStepService {
         if (emailsForNewStep > quotaInfo.remaining) {
           this.logger.warn(
             `⚠️ Adding step to active campaign ${dto.campaignId}: ` +
-              `New step requires ${emailsForNewStep} emails but only ${quotaInfo.remaining} quota remaining. ` +
-              `Auto-spreading will be applied.`,
+            `New step requires ${emailsForNewStep} emails but only ${quotaInfo.remaining} quota remaining. ` +
+            `Auto-spreading will be applied.`,
           );
         }
 
         this.logger.log(
           `✅ Updated quota distribution for campaign ${dto.campaignId}: ` +
-            `New step: ${adjustedDistribution.length} days, ${emailsForNewStep} emails ` +
-            `(global indices: ${emailsFromPreviousSteps} to ${emailsFromPreviousSteps + emailsForNewStep - 1})`,
+          `New step: ${adjustedDistribution.length} days, ${emailsForNewStep} emails ` +
+          `(global indices: ${emailsFromPreviousSteps} to ${emailsFromPreviousSteps + emailsForNewStep - 1})`,
         );
       }
 
       // Convert scheduleTime from step timezone to UTC using Luxon
       let stepData: any = { ...dto, stepOrder: nextOrder };
-      
+
       if (dto.triggerType === 'SCHEDULE' && dto.scheduleTime && dto.timezone) {
         try {
           // scheduleTime is in format "YYYY-MM-DDTHH:mm:ss" (no timezone)
@@ -390,7 +390,7 @@ export class CampaignStepService implements ICampaignStepService {
       if (emailsInProcess > 0) {
         throw new BadRequestException(
           `Cannot edit step. Campaign is ACTIVE and step has ${emailsInProcess} email(s) currently in process (queued or sending). ` +
-            `Please pause the campaign first to edit steps.`,
+          `Please pause the campaign first to edit steps.`,
         );
       }
 
@@ -406,7 +406,7 @@ export class CampaignStepService implements ICampaignStepService {
       if (totalEmails > 0) {
         throw new BadRequestException(
           `Cannot edit step. Campaign is ACTIVE and step has ${totalEmails} email(s) associated with it. ` +
-            `Please pause the campaign first to edit steps.`,
+          `Please pause the campaign first to edit steps.`,
         );
       }
     }
@@ -417,7 +417,7 @@ export class CampaignStepService implements ICampaignStepService {
     if (stepData.replyToStepId && !stepData.replyType) {
       if (!existingStep.replyType) {
         throw new BadRequestException(
-          'When replying to a previous step, replyType is required (OPENED or CLICKED)',
+          'When replying to a previous step, replyType is required (OPENED, CLICKED, or SENT)',
         );
       }
     }
@@ -613,8 +613,8 @@ export class CampaignStepService implements ICampaignStepService {
       // Step has started sending emails - block deletion
       throw new BadRequestException(
         `Cannot delete step. It has ${emailsSent} email(s) that have been sent (SENT, DELIVERED, BOUNCED, or FAILED). ` +
-          `Steps that have started sending emails cannot be deleted. ` +
-          `Please pause or complete the campaign first.`,
+        `Steps that have started sending emails cannot be deleted. ` +
+        `Please pause or complete the campaign first.`,
       );
     }
 
@@ -622,7 +622,7 @@ export class CampaignStepService implements ICampaignStepService {
     // Allow deletion - these can be cancelled
     this.logger.log(
       `Step ${stepId} has ${totalEmails} email(s) but none have been sent yet. ` +
-        `Allowing deletion (emails will be cancelled).`,
+      `Allowing deletion (emails will be cancelled).`,
     );
   }
 
@@ -866,9 +866,9 @@ export class CampaignStepService implements ICampaignStepService {
 
       this.logger.log(
         `Recalculated campaign ${campaignId} analytics: ` +
-          `Opened: ${emailsOpened}, Clicked: ${emailsClicked}, Bounced: ${emailsBounced}, ` +
-          `Replied: ${emailsReplied}, Unsubscribed: ${unsubscribedCount > 0 ? unsubscribedCount : unsubscribes}, ` +
-          `Sent: ${emailsSent}, Delivered: ${emailsDelivered}, Failed: ${emailsFailed}`,
+        `Opened: ${emailsOpened}, Clicked: ${emailsClicked}, Bounced: ${emailsBounced}, ` +
+        `Replied: ${emailsReplied}, Unsubscribed: ${unsubscribedCount > 0 ? unsubscribedCount : unsubscribes}, ` +
+        `Sent: ${emailsSent}, Delivered: ${emailsDelivered}, Failed: ${emailsFailed}`,
       );
     } catch (error) {
       const err = error as Error;
@@ -896,7 +896,7 @@ export class CampaignStepService implements ICampaignStepService {
     if (campaign.status === 'ACTIVE') {
       throw new BadRequestException(
         `Cannot reorder steps. Campaign is ACTIVE. ` +
-          `Please pause the campaign first to reorder steps.`,
+        `Please pause the campaign first to reorder steps.`,
       );
     }
 

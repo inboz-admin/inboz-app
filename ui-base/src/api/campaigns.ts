@@ -59,7 +59,7 @@ export type CampaignStep = {
   scheduleTime?: string | null; // ISO datetime string
   delayMinutes: number; // Delay in minutes between each email sent (minimum 1)
   replyToStepId?: string | null; // ID of previous step to reply to
-  replyType?: 'OPENED' | 'CLICKED' | null; // Type of reply: OPENED (only opened, no clicks/replies), CLICKED (only clicked, no replies)
+  replyType?: 'OPENED' | 'CLICKED' | 'SENT' | null; // Type of reply: OPENED (only opened, no clicks/replies), CLICKED (only clicked, no replies), SENT (all sent, excludes bounced)
   // Analytics fields
   emailsSent: number;
   emailsDelivered: number;

@@ -28,7 +28,7 @@ export function StepModal({ open, onClose, onSave, templates, editingStep, exist
   const [delayMinutes, setDelayMinutes] = useState<string>('0.5');
   const [timezone, setTimezone] = useState<string>('UTC');
   const [replyToStepId, setReplyToStepId] = useState<string>('');
-  const [replyType, setReplyType] = useState<'OPENED' | 'CLICKED' | ''>('');
+  const [replyType, setReplyType] = useState<'OPENED' | 'CLICKED' | 'SENT' | ''>('');
 
   useEffect(() => {
     if (editingStep) {
@@ -50,7 +50,7 @@ export function StepModal({ open, onClose, onSave, templates, editingStep, exist
       if (editingStep.scheduleTime && stepTriggerType === 'SCHEDULE') {
         const stepTimezone = (editingStep as any).timezone || 'UTC';
         const utcDate = new Date(editingStep.scheduleTime);
-        
+
         // Use Intl API to get date components in step timezone (browser native, no library)
         const formatter = new Intl.DateTimeFormat('en-CA', {
           timeZone: stepTimezone,
@@ -62,7 +62,7 @@ export function StepModal({ open, onClose, onSave, templates, editingStep, exist
           second: '2-digit',
           hour12: false,
         });
-        
+
         const parts = formatter.formatToParts(utcDate);
         const year = parseInt(parts.find(p => p.type === 'year')?.value || '0');
         const month = parseInt(parts.find(p => p.type === 'month')?.value || '0') - 1; // 0-11
@@ -70,7 +70,7 @@ export function StepModal({ open, onClose, onSave, templates, editingStep, exist
         const hour = parseInt(parts.find(p => p.type === 'hour')?.value || '0');
         const minute = parseInt(parts.find(p => p.type === 'minute')?.value || '0');
         const second = parseInt(parts.find(p => p.type === 'second')?.value || '0');
-        
+
         // Create date in local timezone with step timezone values for display
         const displayDate = new Date(year, month, day, hour, minute, second);
         setScheduledDateTime(displayDate);
@@ -100,7 +100,7 @@ export function StepModal({ open, onClose, onSave, templates, editingStep, exist
     // Simple: Just send date/time components and timezone to backend
     // Backend will handle all timezone conversions using Luxon
     let scheduleTime: string | null = null;
-    
+
     if (triggerType === 'SCHEDULE' && scheduledDateTime) {
       // Extract date/time components (user's local time)
       const year = scheduledDateTime.getFullYear();
@@ -109,14 +109,14 @@ export function StepModal({ open, onClose, onSave, templates, editingStep, exist
       const hours = scheduledDateTime.getHours();
       const minutes = scheduledDateTime.getMinutes();
       const seconds = scheduledDateTime.getSeconds();
-      
+
       // Send as simple date/time string: "YYYY-MM-DDTHH:mm:ss"
       // Backend will interpret this in the step's timezone
       scheduleTime = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
     }
-    
+
     const delayValue = delayMinutes ? parseFloat(delayMinutes) : undefined;
-    
+
     onSave({
       ...(editingStep?.id ? { id: editingStep.id } : {}),
       name,
@@ -134,15 +134,15 @@ export function StepModal({ open, onClose, onSave, templates, editingStep, exist
   const handleClose = () => {
     setName('');
     setTemplateId('');
-      setTriggerType('IMMEDIATE');
-      setScheduledDateTime(undefined);
-      setDelayMinutes('0.5');
-      setTimezone('UTC');
-      setReplyToStepId('');
-      setReplyType('');
-      onClose();
+    setTriggerType('IMMEDIATE');
+    setScheduledDateTime(undefined);
+    setDelayMinutes('0.5');
+    setTimezone('UTC');
+    setReplyToStepId('');
+    setReplyType('');
+    onClose();
   };
-  
+
   // Filter previous steps:
   // 1. Only show steps before current step order
   // 2. Only show completed steps (progressPercentage >= 100 or emailsCompleted >= totalExpected)
@@ -150,23 +150,23 @@ export function StepModal({ open, onClose, onSave, templates, editingStep, exist
     // Filter by step order
     const isBeforeCurrent = currentStepOrder === undefined || step.stepOrder < currentStepOrder;
     if (!isBeforeCurrent) return false;
-    
+
     // Check if step is completed
     const progressPercentage = (step as any).progressPercentage ?? 0;
     const emailsCompleted = (step as any).emailsCompleted ?? step.emailsSent ?? 0;
     const totalExpected = (step as any).totalExpected ?? 0;
-    
+
     // Step is completed if:
     // - progressPercentage is 100% or more, OR
     // - step has emails and all expected emails are completed (emailsCompleted >= totalExpected and totalExpected > 0)
     const isCompleted = progressPercentage >= 100 || (totalExpected > 0 && emailsCompleted >= totalExpected);
-    
+
     return isCompleted;
   });
 
-  const canSave = name.trim() && templateId && delayMinutes && parseFloat(delayMinutes) >= 0.5 && 
-    (triggerType === 'IMMEDIATE' || 
-     (triggerType === 'SCHEDULE' && scheduledDateTime)) &&
+  const canSave = name.trim() && templateId && delayMinutes && parseFloat(delayMinutes) >= 0.5 &&
+    (triggerType === 'IMMEDIATE' ||
+      (triggerType === 'SCHEDULE' && scheduledDateTime)) &&
     (!replyToStepId || replyType); // If replyToStepId is set, replyType must be set
 
   return (
@@ -174,11 +174,11 @@ export function StepModal({ open, onClose, onSave, templates, editingStep, exist
       <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
-            {readOnly 
+            {readOnly
               ? 'View Sequence'
-              : editingStep 
-              ? 'Edit Sequence' 
-              : 'Add Sequence'}
+              : editingStep
+                ? 'Edit Sequence'
+                : 'Add Sequence'}
           </DialogTitle>
         </DialogHeader>
         <div className="space-y-4 py-4">
@@ -212,8 +212,8 @@ export function StepModal({ open, onClose, onSave, templates, editingStep, exist
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="trigger-type">Trigger Type *</Label>
-              <Select 
-                value={triggerType} 
+              <Select
+                value={triggerType}
                 onValueChange={(v) => setTriggerType(v as 'IMMEDIATE' | 'SCHEDULE')}
                 disabled={readOnly}
               >
@@ -226,11 +226,11 @@ export function StepModal({ open, onClose, onSave, templates, editingStep, exist
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground">
-                {triggerType === 'IMMEDIATE' 
-                  ? 'Starts immediately' 
+                {triggerType === 'IMMEDIATE'
+                  ? 'Starts immediately'
                   : triggerType === 'SCHEDULE'
-                  ? 'Starts at scheduled time'
-                  : 'Select trigger'}
+                    ? 'Starts at scheduled time'
+                    : 'Select trigger'}
               </p>
             </div>
             <div className="space-y-2">
@@ -263,8 +263,8 @@ export function StepModal({ open, onClose, onSave, templates, editingStep, exist
           {triggerType === 'SCHEDULE' && (
             <div className="space-y-2">
               <Label htmlFor="step-datetime">Schedule Date & Time *</Label>
-              <DateTimePicker 
-                date={scheduledDateTime} 
+              <DateTimePicker
+                date={scheduledDateTime}
                 setDate={setScheduledDateTime}
                 disabled={readOnly}
               />
@@ -292,8 +292,8 @@ export function StepModal({ open, onClose, onSave, templates, editingStep, exist
           {previousSteps.length > 0 && (
             <div className="space-y-2">
               <Label htmlFor="reply-to-step">Follow up to Sequence (Optional)</Label>
-              <Select 
-                value={replyToStepId || undefined} 
+              <Select
+                value={replyToStepId || undefined}
                 onValueChange={(value) => setReplyToStepId(value)}
                 disabled={readOnly}
               >
@@ -314,21 +314,24 @@ export function StepModal({ open, onClose, onSave, templates, editingStep, exist
               {replyToStepId && (
                 <div className="space-y-2">
                   <Label htmlFor="reply-type">Filter Follow Up List *</Label>
-                  <Select value={replyType} onValueChange={(v) => setReplyType(v as 'OPENED' | 'CLICKED')} disabled={readOnly}>
+                  <Select value={replyType} onValueChange={(v) => setReplyType(v as 'OPENED' | 'CLICKED' | 'SENT')} disabled={readOnly}>
                     <SelectTrigger id="reply-type" className="w-full" disabled={readOnly}>
                       <SelectValue placeholder="Select type" />
                     </SelectTrigger>
                     <SelectContent>
+                      <SelectItem value="SENT">Sent (All Except Bounced)</SelectItem>
                       <SelectItem value="OPENED">Opened Only</SelectItem>
                       <SelectItem value="CLICKED">Clicked Only</SelectItem>
                     </SelectContent>
                   </Select>
                   <p className="text-xs text-muted-foreground">
-                    {replyType === 'OPENED' 
+                    {replyType === 'OPENED'
                       ? 'Only who opened (excludes clicks & replies)'
                       : replyType === 'CLICKED'
-                      ? 'Only who clicked (excludes replies)'
-                      : 'Required when follow up to sequence'}
+                        ? 'Only who clicked (excludes replies)'
+                        : replyType === 'SENT'
+                          ? 'All who were sent (excludes bounced & replies)'
+                          : 'Required when follow up to sequence'}
                   </p>
                 </div>
               )}

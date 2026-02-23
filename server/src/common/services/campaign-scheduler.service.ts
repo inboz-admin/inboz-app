@@ -54,9 +54,9 @@ export class ScheduledTasksService {
   ) {
     // Get intervals from config (default: every 6 hours)
     const isProduction = this.configService.get('NODE_ENV') === 'production';
-    this.bounceDetectionInterval = this.configService.get('BOUNCE_DETECTION_INTERVAL') || 
+    this.bounceDetectionInterval = this.configService.get('BOUNCE_DETECTION_INTERVAL') ||
       '0 */6 * * *'; // Every 6 hours at minute 0
-    this.replyDetectionInterval = this.configService.get('REPLY_DETECTION_INTERVAL') || 
+    this.replyDetectionInterval = this.configService.get('REPLY_DETECTION_INTERVAL') ||
       '0 */6 * * *'; // Every 6 hours at minute 0
   }
 
@@ -74,7 +74,7 @@ export class ScheduledTasksService {
       this.logger.log('Running daily quota reset at midnight IST...');
 
       await this.rateLimiterService.resetAllQuotas();
-      
+
       // Clear quota management cache to ensure fresh data
       this.quotaManagementService.clearAllCache();
 
@@ -117,12 +117,12 @@ export class ScheduledTasksService {
       for (const campaign of campaigns) {
         try {
           const totalExpectedEmails = campaign.totalRecipients * campaign.totalSteps;
-          
+
           if (totalExpectedEmails === 0) {
             continue; // No emails expected
           }
 
-          // Count actual processed emails from email_messages table
+          // Count actual processed emails from email_messages table (exclude CANCELLED - those are from pause, not "done")
           const processedEmails = await this.emailMessageModel.count({
             where: {
               campaignId: campaign.id,
@@ -132,7 +132,19 @@ export class ScheduledTasksService {
                   EmailMessageStatus.DELIVERED,
                   EmailMessageStatus.FAILED,
                   EmailMessageStatus.BOUNCED,
-                  EmailMessageStatus.CANCELLED,
+                ],
+              },
+            },
+          });
+
+          // At least one email must have been sent/delivered to consider campaign "completed" (prevents completing when all cancelled or all failed)
+          const sentOrDeliveredCount = await this.emailMessageModel.count({
+            where: {
+              campaignId: campaign.id,
+              status: {
+                [Op.in]: [
+                  EmailMessageStatus.SENT,
+                  EmailMessageStatus.DELIVERED,
                 ],
               },
             },
@@ -146,15 +158,29 @@ export class ScheduledTasksService {
             },
           });
 
-          // Only mark as completed if all emails processed AND none queued
-          if (processedEmails >= totalExpectedEmails && queuedEmails === 0) {
-            await campaign.update({ 
+          // Check for any emails currently being sent (SENDING status)
+          // Prevents premature completion when emails are in-flight
+          const sendingEmails = await this.emailMessageModel.count({
+            where: {
+              campaignId: campaign.id,
+              status: EmailMessageStatus.SENDING,
+            },
+          });
+
+          // Only mark as completed if all emails processed, none queued, none sending, AND at least one email was sent/delivered
+          if (
+            processedEmails >= totalExpectedEmails &&
+            queuedEmails === 0 &&
+            sendingEmails === 0 &&
+            sentOrDeliveredCount > 0
+          ) {
+            await campaign.update({
               status: 'COMPLETED',
               completedAt: new Date(),
             });
             this.logger.log(
               `🎉 Campaign ${campaign.id} marked as COMPLETED ` +
-              `(${processedEmails}/${totalExpectedEmails} emails processed, ${queuedEmails} queued)`
+              `(${processedEmails}/${totalExpectedEmails} processed, ${sentOrDeliveredCount} sent/delivered, ${queuedEmails} queued, ${sendingEmails} sending)`
             );
           }
         } catch (error) {
@@ -189,7 +215,7 @@ export class ScheduledTasksService {
     this.schedulerHealthService.recordStart(schedulerName);
     const startTime = Date.now();
     const timestamp = new Date().toISOString();
-    
+
     try {
       this.logger.log(
         `📧 [BOUNCE DETECTION] Starting bounce detection job enqueueing at ${timestamp}...`,
@@ -244,18 +270,18 @@ export class ScheduledTasksService {
           ),
         ),
       );
-      
+
       const duration = Date.now() - startTime;
       this.schedulerHealthService.recordSuccess(schedulerName, duration);
-      
-        this.logger.log(
+
+      this.logger.log(
         `✅ [BOUNCE DETECTION] Enqueued ${jobs.length} bounce detection jobs in ${(duration / 1000).toFixed(2)}s`,
-        );
+      );
     } catch (error) {
       const err = error as Error;
       const duration = Date.now() - startTime;
       this.schedulerHealthService.recordFailure(schedulerName, duration, err);
-      
+
       this.logger.error(
         `❌ [BOUNCE DETECTION] Failed to enqueue jobs after ${(duration / 1000).toFixed(2)}s: ${err.message}`,
         err.stack,
@@ -274,7 +300,7 @@ export class ScheduledTasksService {
     this.schedulerHealthService.recordStart(schedulerName);
     const startTime = Date.now();
     const timestamp = new Date().toISOString();
-    
+
     try {
       this.logger.log(
         `📬 [REPLY DETECTION] Starting reply detection job enqueueing at ${timestamp}...`,
@@ -329,18 +355,18 @@ export class ScheduledTasksService {
           ),
         ),
       );
-      
+
       const duration = Date.now() - startTime;
       this.schedulerHealthService.recordSuccess(schedulerName, duration);
-      
-        this.logger.log(
+
+      this.logger.log(
         `✅ [REPLY DETECTION] Enqueued ${jobs.length} reply detection jobs in ${(duration / 1000).toFixed(2)}s`,
-        );
+      );
     } catch (error) {
       const err = error as Error;
       const duration = Date.now() - startTime;
       this.schedulerHealthService.recordFailure(schedulerName, duration, err);
-      
+
       this.logger.error(
         `❌ [REPLY DETECTION] Failed to enqueue jobs after ${(duration / 1000).toFixed(2)}s: ${err.message}`,
         err.stack,

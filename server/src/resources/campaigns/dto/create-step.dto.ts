@@ -45,8 +45,8 @@ export class CreateStepDto {
   replyToStepId?: string | null;
 
   @IsOptional()
-  @IsEnum(['OPENED', 'CLICKED'])
-  replyType?: 'OPENED' | 'CLICKED' | null;
+  @IsEnum(['OPENED', 'CLICKED', 'SENT'])
+  replyType?: 'OPENED' | 'CLICKED' | 'SENT' | null;
 }
 
 

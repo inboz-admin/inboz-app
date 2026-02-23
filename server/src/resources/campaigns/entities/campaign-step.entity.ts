@@ -50,10 +50,10 @@ export class CampaignStep extends BaseEntity {
   replyToStepId: string | null;
 
   @Column({
-    type: DataType.ENUM('OPENED', 'CLICKED'),
+    type: DataType.ENUM('OPENED', 'CLICKED', 'SENT'),
     allowNull: true,
   })
-  replyType: 'OPENED' | 'CLICKED' | null;
+  replyType: 'OPENED' | 'CLICKED' | 'SENT' | null;
 
   @Column({ type: DataType.INTEGER, allowNull: false, defaultValue: 0 })
   emailsSent: number;

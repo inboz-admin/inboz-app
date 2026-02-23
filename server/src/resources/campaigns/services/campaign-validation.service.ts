@@ -28,7 +28,7 @@ export class CampaignValidationService {
     private readonly emailMessageModel: typeof EmailMessage,
     private readonly campaignProgressService: CampaignProgressService,
     private readonly subscriptionsService: SubscriptionsService,
-  ) {}
+  ) { }
 
   async validateStepAddition(
     dto: CreateStepDto,
@@ -37,7 +37,7 @@ export class CampaignValidationService {
   ): Promise<void> {
     if (dto.replyToStepId && !dto.replyType) {
       throw new BadRequestException(
-        'When replying to a previous step, replyType is required (OPENED or CLICKED)',
+        'When replying to a previous step, replyType is required (OPENED, CLICKED, or SENT)',
       );
     }
 
@@ -65,13 +65,13 @@ export class CampaignValidationService {
           // Fallback: try to parse as-is (for backward compatibility)
           scheduleTime = new Date(dto.scheduleTime);
         }
-        
+
         if (isNaN(scheduleTime.getTime())) {
           throw new BadRequestException(
             'Invalid schedule time format. Expected date/time string in format "YYYY-MM-DDTHH:mm:ss".',
           );
         }
-        
+
         // Check if schedule time is in the past (in UTC)
         if (campaign.status === 'ACTIVE' && scheduleTime < new Date()) {
           throw new BadRequestException(
@@ -163,8 +163,8 @@ export class CampaignValidationService {
       if (stepOrders[i] !== expectedOrder) {
         throw new BadRequestException(
           `Cannot add step. Steps must be added sequentially. ` +
-            `Expected step order ${expectedOrder}, but found step order ${stepOrders[i]}. ` +
-            `Please ensure all steps are added in order without gaps.`,
+          `Expected step order ${expectedOrder}, but found step order ${stepOrders[i]}. ` +
+          `Please ensure all steps are added in order without gaps.`,
         );
       }
     }
@@ -239,8 +239,8 @@ export class CampaignValidationService {
 
       throw new BadRequestException(
         `Cannot add new step. All previous steps must be completed first, or the last step's last email scheduled time must have passed. ` +
-          `The following step(s) are not yet completed: ${incompleteStepNames}. ` +
-          `Please wait for all previous steps to complete or for the last email scheduled time to pass before adding a new step.`,
+        `The following step(s) are not yet completed: ${incompleteStepNames}. ` +
+        `Please wait for all previous steps to complete or for the last email scheduled time to pass before adding a new step.`,
       );
     }
 
@@ -290,14 +290,14 @@ export class CampaignValidationService {
 
         throw new BadRequestException(
           `Cannot schedule step. Scheduled time (${formattedScheduleTime}) exceeds the maximum allowed date ` +
-            `(${formattedMaxDate}). Your subscription ends on ${formattedEndDate}, and emails can only be scheduled ` +
-            `up to 3 days after the subscription end date. Please choose an earlier schedule time or renew your subscription.`,
+          `(${formattedMaxDate}). Your subscription ends on ${formattedEndDate}, and emails can only be scheduled ` +
+          `up to 3 days after the subscription end date. Please choose an earlier schedule time or renew your subscription.`,
         );
       }
 
       this.logger.debug(
         `Schedule time ${scheduleTime.toISOString()} is within subscription period ` +
-          `(ends ${subscriptionEndDate.toISOString()}, max allowed ${maxAllowedDate.toISOString()})`,
+        `(ends ${subscriptionEndDate.toISOString()}, max allowed ${maxAllowedDate.toISOString()})`,
       );
     } catch (error) {
       if (error instanceof BadRequestException) {

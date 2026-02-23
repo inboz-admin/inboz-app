@@ -59,7 +59,7 @@ export class CampaignProcessorProcessor extends WorkerHost {
 
   async process(job: Job): Promise<any> {
     this.logger.log(`🚀 Processing job ${job.id} of type ${job.name}`);
-    
+
     // Route to appropriate handler based on job type
     if (job.name === 'process-new-step') {
       return this.processNewStep(job);
@@ -136,7 +136,7 @@ export class CampaignProcessorProcessor extends WorkerHost {
       sentFromEmail: string;
       createdBy: string;
     }> = [];
-    
+
     const jobsToQueue: Array<{
       emailMessageId: string;
       campaignId: string;
@@ -149,12 +149,12 @@ export class CampaignProcessorProcessor extends WorkerHost {
       stepName: string;
       sendFormat?: string; // Template sendFormat (HTML or TEXT)
     }> = [];
-    
+
     let skipped = 0;
     let errors = 0;
     const stepName = step.name || `Step ${step.stepOrder}`;
     const now = new Date();
-    
+
     // Track state for fallback scheduling
     let localCurrentDay = currentDay;
     let localEmailsOnCurrentDay = emailsOnCurrentDay;
@@ -162,11 +162,11 @@ export class CampaignProcessorProcessor extends WorkerHost {
     let localCurrentDayStart = currentDayStart;
     let localCurrentDayEnd = currentDayEnd;
     let localFirstEmailTimeOnDay0 = firstEmailTimeOnDay0;
-    
+
     for (let i = 0; i < batch.length; i++) {
       const contact = batch[i];
       const contactIndex = batchIndex + i; // Global contact index
-      
+
       try {
         // Check if contact is subscribed and not globally bounced
         if (contact.subscribed === false) {
@@ -176,7 +176,7 @@ export class CampaignProcessorProcessor extends WorkerHost {
           skipped++;
           continue;
         }
-        
+
         if (contact.status === 'BOUNCED') {
           this.logger.debug(
             `⏭️ Skipping contact ${contact.id} (${contact.email || 'no email'}): globally bounced`
@@ -184,23 +184,23 @@ export class CampaignProcessorProcessor extends WorkerHost {
           skipped++;
           continue;
         }
-        
+
         // Check if email already exists
         if (existingEmailMap.has(contact.id)) {
           skipped++;
           continue;
         }
-        
+
         // Calculate send time
         let sendAt: Date;
-        
+
         if (useQuotaDistribution && quotaDistribution) {
           const globalEmailIndex = emailsFromPreviousSteps + contactIndex;
           const dayDistribution = quotaDistribution.find(
             (d: { day: number; startIndex: number; endIndex: number }) =>
               globalEmailIndex >= d.startIndex && globalEmailIndex <= d.endIndex
           );
-          
+
           if (dayDistribution) {
             sendAt = this.campaignSchedulingService.calculateSendTime(
               step,
@@ -229,10 +229,10 @@ export class CampaignProcessorProcessor extends WorkerHost {
             localCurrentDayEnd = dayBounds.end;
             localRemainingOnCurrentDay = dailyLimit; // Simplified - would need to check queue
           }
-          
+
           const delayMinutes = step.delayMinutes || 1;
           let effectiveBaseTime: Date;
-          
+
           if (localCurrentDay === 0) {
             if (localEmailsOnCurrentDay === 0) {
               effectiveBaseTime = now;
@@ -243,21 +243,21 @@ export class CampaignProcessorProcessor extends WorkerHost {
           } else {
             effectiveBaseTime = new Date(localCurrentDayStart.getTime() + 60 * 1000);
           }
-          
+
           if (step.triggerType === 'SCHEDULE' && step.scheduleTime) {
             const scheduleTime = new Date(step.scheduleTime);
             if (scheduleTime > effectiveBaseTime) {
               effectiveBaseTime = scheduleTime;
             }
           }
-          
+
           const totalDelayMs = localEmailsOnCurrentDay * delayMinutes * 60 * 1000;
           sendAt = new Date(effectiveBaseTime.getTime() + totalDelayMs);
-          
+
           localEmailsOnCurrentDay++;
           localRemainingOnCurrentDay--;
         }
-        
+
         // Personalize content
         const personalized = this.emailPersonalizationService.personalizeContent(
           template.subject,
@@ -265,7 +265,7 @@ export class CampaignProcessorProcessor extends WorkerHost {
           template.textContent || '',
           contact,
         );
-        
+
         // Prepare email data for bulk create
         emailsToCreate.push({
           organizationId,
@@ -281,7 +281,7 @@ export class CampaignProcessorProcessor extends WorkerHost {
           sentFromEmail: senderEmail,
           createdBy: userId,
         });
-        
+
         // Prepare job data (will be queued after emails are created)
         jobsToQueue.push({
           emailMessageId: '', // Will be set after email creation
@@ -302,7 +302,7 @@ export class CampaignProcessorProcessor extends WorkerHost {
         );
       }
     }
-    
+
     // Bulk create emails in transaction (OPTIMIZATION: Issue #7)
     let createdEmails: EmailMessage[] = [];
     if (emailsToCreate.length > 0) {
@@ -312,7 +312,7 @@ export class CampaignProcessorProcessor extends WorkerHost {
         if (!sequelize) {
           throw new Error('Sequelize instance not available');
         }
-        
+
         // Use transaction for batch creation (OPTIMIZATION: Issue #7)
         createdEmails = await sequelize.transaction(async (tx) => {
           const created = await this.emailMessageModel.bulkCreate(emailsToCreate, {
@@ -321,7 +321,7 @@ export class CampaignProcessorProcessor extends WorkerHost {
           }) as EmailMessage[];
           return created;
         });
-        
+
         // Update job data with email IDs
         for (let i = 0; i < jobsToQueue.length; i++) {
           jobsToQueue[i].emailMessageId = createdEmails[i].id;
@@ -346,7 +346,7 @@ export class CampaignProcessorProcessor extends WorkerHost {
         };
       }
     }
-    
+
     return {
       created: createdEmails.length,
       skipped,
@@ -375,7 +375,7 @@ export class CampaignProcessorProcessor extends WorkerHost {
   ): AsyncGenerator<Contact[], void, unknown> {
     let offset = 0;
     let hasMore = true;
-    
+
     while (hasMore) {
       const contactMembers = await this.contactListMemberModel.findAll({
         where: { contactListId },
@@ -390,23 +390,23 @@ export class CampaignProcessorProcessor extends WorkerHost {
         offset,
         order: [['contactId', 'ASC']],
       });
-      
+
       const contacts = contactMembers
         .map(member => member.contact)
-        .filter(contact => 
-          contact != null && 
-          contact.subscribed !== false && 
+        .filter(contact =>
+          contact != null &&
+          contact.subscribed !== false &&
           contact.status !== 'BOUNCED' && // Exclude globally bounced contacts only
           (!filter || filter(contact))
         ) as Contact[];
-      
+
       if (contacts.length > 0) {
         yield contacts;
       }
-      
+
       hasMore = contactMembers.length === batchSize;
       offset += batchSize;
-      
+
       // Log progress for large lists
       if (offset % (batchSize * 10) === 0) {
         this.logger.debug(`Loaded ${offset} contacts from contact list ${contactListId}`);
@@ -472,14 +472,14 @@ export class CampaignProcessorProcessor extends WorkerHost {
         const scheduleTime = new Date(step.scheduleTime);
         const now = new Date();
         const timeDiff = scheduleTime.getTime() - now.getTime();
-        
+
         this.logger.log(
           `⏰ SCHEDULED STEP DETECTED: ` +
           `scheduleTime=${scheduleTime.toISOString()}, ` +
           `currentTime=${now.toISOString()}, ` +
           `timeDifference=${timeDiff > 0 ? `${Math.round(timeDiff / 1000 / 60)} minutes in future` : `${Math.round(Math.abs(timeDiff) / 1000 / 60)} minutes in past`}`
         );
-        
+
         if (scheduleTime > now) {
           const hoursUntilSchedule = Math.round(timeDiff / (1000 * 60 * 60));
           this.logger.log(
@@ -503,14 +503,14 @@ export class CampaignProcessorProcessor extends WorkerHost {
       // Get quota distribution from campaign sequenceSettings if available
       // BUT: We'll recalculate dynamically for each step to account for already-scheduled emails
       const storedQuotaDistribution = campaign.sequenceSettings?.quotaDistribution || null;
-      
+
       // Get total steps count for calculating global email index
       const allSteps = await this.campaignStepModel.findAll({
         where: { campaignId },
         order: [['stepOrder', 'ASC']],
       });
       const totalSteps = allSteps.length;
-      
+
       // Calculate how many emails were already scheduled by previous steps (OPTIMIZATION: Issue #5)
       // Use aggregated query instead of loop to avoid N queries
       let emailsFromPreviousSteps = 0;
@@ -519,7 +519,7 @@ export class CampaignProcessorProcessor extends WorkerHost {
         const previousStepIds = allSteps
           .filter(s => s.stepOrder < step.stepOrder)
           .map(s => s.id);
-        
+
         if (previousStepIds.length > 0) {
           // Single aggregated query instead of N queries (OPTIMIZATION: Issue #5)
           const emailCounts = await this.emailMessageModel.findAll({
@@ -534,12 +534,12 @@ export class CampaignProcessorProcessor extends WorkerHost {
             group: ['campaignStepId'],
             raw: true,
           });
-          
+
           // Sum up all counts
           emailsFromPreviousSteps = emailCounts.reduce((sum: number, row: any) => {
             return sum + (parseInt(row.count) || 0);
           }, 0);
-          
+
           this.logger.debug(
             `📊 Previous steps emails count: ${emailsFromPreviousSteps} ` +
             `(from ${previousStepIds.length} step(s) before step ${step.stepOrder}, using aggregated query)`
@@ -554,7 +554,7 @@ export class CampaignProcessorProcessor extends WorkerHost {
           {
             model: this.contactModel,
             as: 'contact',
-            where: { 
+            where: {
               subscribed: true,
               status: { [Op.not]: 'BOUNCED' }, // Exclude bounced contacts
             },
@@ -576,7 +576,7 @@ export class CampaignProcessorProcessor extends WorkerHost {
       // This accounts for emails already scheduled by previous steps
       // getRemainingQuotaForDays will automatically account for scheduled emails from previous steps
       let quotaDistribution: Array<{ day: number; startIndex: number; endIndex: number; quotaUsed: number }> | null = null;
-      
+
       if (!step.replyToStepId) {
         // Calculate quota distribution dynamically for this step
         // This uses getRemainingQuotaForDays which queries actual scheduled emails from database
@@ -586,13 +586,13 @@ export class CampaignProcessorProcessor extends WorkerHost {
         const DAILY_LIMIT = await this.quotaManagementService.getDailyEmailLimit(userId);
         const remainingQuota = quotaStats.remaining;
         const emailsForThisStep = subscribedCount;
-        
+
         this.logger.log(
           `📊 Calculating dynamic quota distribution for step ${step.stepOrder}: ` +
           `${emailsForThisStep} emails, remaining quota: ${remainingQuota}, ` +
           `previous steps emails: ${emailsFromPreviousSteps}`
         );
-        
+
         // Calculate dynamic quota distribution for THIS step only
         // getRemainingQuotaForDays will account for emails already scheduled by previous steps
         // Get timezone from step
@@ -605,12 +605,12 @@ export class CampaignProcessorProcessor extends WorkerHost {
           const scheduleTime = new Date(step.scheduleTime);
           // Use the same helper logic as in CampaignSchedulingService
           const todayStart = getMidnightInTimezone(0, timezone);
-          
+
           // Find which day the scheduleTime falls on
           for (let day = 0; day <= MAX_SCHEDULE_DAYS; day++) {
             const dayStart = getMidnightInTimezone(day, timezone);
             const dayEnd = getMidnightInTimezone(day + 1, timezone);
-            
+
             if (scheduleTime >= dayStart && scheduleTime < dayEnd) {
               startDay = day;
               this.logger.log(
@@ -619,7 +619,7 @@ export class CampaignProcessorProcessor extends WorkerHost {
               break;
             }
           }
-          
+
           if (startDay === undefined) {
             // If scheduleTime is in the past, use day 0
             if (scheduleTime < todayStart) {
@@ -645,7 +645,7 @@ export class CampaignProcessorProcessor extends WorkerHost {
           timezone,
           startDay,
         );
-        
+
         // Adjust indices to be global (accounting for previous steps)
         const adjustedDistribution = quotaDistribution.map(dist => ({
           day: dist.day,
@@ -653,9 +653,9 @@ export class CampaignProcessorProcessor extends WorkerHost {
           endIndex: dist.endIndex + emailsFromPreviousSteps,
           quotaUsed: dist.quotaUsed,
         }));
-        
+
         quotaDistribution = adjustedDistribution;
-        
+
         this.logger.log(
           `✅ Dynamic quota distribution for step ${step.stepOrder}: ` +
           `${quotaDistribution.length} day(s), ${emailsForThisStep} emails, ` +
@@ -667,11 +667,11 @@ export class CampaignProcessorProcessor extends WorkerHost {
       // 3. Determine contact filtering for reply-to-step (if applicable)
       let contactFilter: ((contact: Contact) => boolean) | undefined;
       let eligibleContactIds: string[] | undefined;
-      
+
       if (step.replyToStepId && step.replyType) {
         // Filter contacts based on reply-to-step configuration
         this.logger.log(`Step ${stepId} configured to reply to step ${step.replyToStepId} (type: ${step.replyType})`);
-        
+
         if (step.replyType === 'CLICKED') {
           // Only send to contacts who clicked BUT did NOT reply
           const clickedEmails = await this.emailMessageModel.findAll({
@@ -683,9 +683,9 @@ export class CampaignProcessorProcessor extends WorkerHost {
             attributes: ['contactId'],
             group: ['contactId'],
           });
-          
+
           const clickedContactIds = clickedEmails.map((email: any) => email.contactId);
-          
+
           if (clickedContactIds.length === 0) {
             this.logger.warn(`No contacts clicked in step ${step.replyToStepId}, skipping step ${stepId}`);
             return {
@@ -697,7 +697,7 @@ export class CampaignProcessorProcessor extends WorkerHost {
               message: 'No contacts clicked in the previous step, skipping',
             };
           }
-          
+
           // Exclude contacts who replied
           const repliedEmails = await this.emailMessageModel.findAll({
             where: {
@@ -708,11 +708,11 @@ export class CampaignProcessorProcessor extends WorkerHost {
             attributes: ['contactId'],
             group: ['contactId'],
           });
-          
+
           const repliedContactIds = repliedEmails.map((email: any) => email.contactId);
-          
+
           eligibleContactIds = clickedContactIds.filter(id => !repliedContactIds.includes(id));
-          
+
           if (eligibleContactIds.length === 0) {
             this.logger.warn(`No eligible contacts for CLICKED filter (all clicked contacts also replied), skipping step ${stepId}`);
             return {
@@ -724,7 +724,7 @@ export class CampaignProcessorProcessor extends WorkerHost {
               message: 'No eligible contacts for CLICKED filter, skipping',
             };
           }
-          
+
           contactFilter = (contact: Contact) => eligibleContactIds!.includes(contact.id);
         } else if (step.replyType === 'OPENED') {
           // Only send to contacts who opened BUT did NOT click AND did NOT reply
@@ -737,9 +737,9 @@ export class CampaignProcessorProcessor extends WorkerHost {
             attributes: ['contactId'],
             group: ['contactId'],
           });
-          
+
           const openedContactIds = openedEmails.map((email: any) => email.contactId);
-          
+
           if (openedContactIds.length === 0) {
             this.logger.warn(`No contacts opened emails in step ${step.replyToStepId}, skipping step ${stepId}`);
             return {
@@ -751,7 +751,7 @@ export class CampaignProcessorProcessor extends WorkerHost {
               message: 'No contacts opened emails in the previous step, skipping',
             };
           }
-          
+
           // Exclude contacts who clicked
           const clickedEmails = await this.emailMessageModel.findAll({
             where: {
@@ -762,9 +762,9 @@ export class CampaignProcessorProcessor extends WorkerHost {
             attributes: ['contactId'],
             group: ['contactId'],
           });
-          
+
           const clickedContactIds = clickedEmails.map((email: any) => email.contactId);
-          
+
           // Exclude contacts who replied
           const repliedEmails = await this.emailMessageModel.findAll({
             where: {
@@ -775,13 +775,13 @@ export class CampaignProcessorProcessor extends WorkerHost {
             attributes: ['contactId'],
             group: ['contactId'],
           });
-          
+
           const repliedContactIds = repliedEmails.map((email: any) => email.contactId);
-          
+
           eligibleContactIds = openedContactIds.filter(
             id => !clickedContactIds.includes(id) && !repliedContactIds.includes(id)
           );
-          
+
           if (eligibleContactIds.length === 0) {
             this.logger.warn(`No eligible contacts for OPENED filter (all opened contacts also clicked or replied), skipping step ${stepId}`);
             return {
@@ -793,7 +793,61 @@ export class CampaignProcessorProcessor extends WorkerHost {
               message: 'No eligible contacts for OPENED filter, skipping',
             };
           }
-          
+
+          contactFilter = (contact: Contact) => eligibleContactIds!.includes(contact.id);
+        } else if (step.replyType === 'SENT') {
+          // Send to ALL contacts who were sent an email in the previous step, EXCEPT bounced ones
+          const sentEmails = await this.emailMessageModel.findAll({
+            where: {
+              campaignId: campaign.id,
+              campaignStepId: step.replyToStepId,
+              status: { [Op.notIn]: [EmailMessageStatus.BOUNCED] },
+            },
+            attributes: ['contactId'],
+            group: ['contactId'],
+          });
+
+          const sentContactIds = sentEmails.map((email: any) => email.contactId);
+
+          if (sentContactIds.length === 0) {
+            this.logger.warn(`No contacts were sent emails in step ${step.replyToStepId}, skipping step ${stepId}`);
+            return {
+              success: true,
+              campaignId,
+              stepId,
+              queuedEmails: 0,
+              totalContacts: 0,
+              message: 'No contacts were sent emails in the previous step, skipping',
+            };
+          }
+
+          // Exclude contacts who replied (higher engagement)
+          const repliedEmails = await this.emailMessageModel.findAll({
+            where: {
+              campaignId: campaign.id,
+              campaignStepId: step.replyToStepId,
+              replyCount: { [Op.gt]: 0 },
+            },
+            attributes: ['contactId'],
+            group: ['contactId'],
+          });
+
+          const repliedContactIds = repliedEmails.map((email: any) => email.contactId);
+
+          eligibleContactIds = sentContactIds.filter(id => !repliedContactIds.includes(id));
+
+          if (eligibleContactIds.length === 0) {
+            this.logger.warn(`No eligible contacts for SENT filter (all sent contacts also replied), skipping step ${stepId}`);
+            return {
+              success: true,
+              campaignId,
+              stepId,
+              queuedEmails: 0,
+              totalContacts: 0,
+              message: 'No eligible contacts for SENT filter, skipping',
+            };
+          }
+
           contactFilter = (contact: Contact) => eligibleContactIds!.includes(contact.id);
         }
       }
@@ -828,7 +882,7 @@ export class CampaignProcessorProcessor extends WorkerHost {
           `⚠️ Emails already exist for step ${stepId}: ${existingEmails} emails found. ` +
           `Total contacts: ${subscribedCount}, Remaining to schedule: ${remainingContacts > 0 ? remainingContacts : 0}`
         );
-        
+
         if (remainingContacts === 0) {
           return {
             success: true,
@@ -839,7 +893,7 @@ export class CampaignProcessorProcessor extends WorkerHost {
             message: 'Emails already exist for this step, skipped',
           };
         }
-        
+
         this.logger.log(`📧 Continuing to schedule ${remainingContacts} remaining emails for step ${stepId}`);
       }
 
@@ -849,11 +903,11 @@ export class CampaignProcessorProcessor extends WorkerHost {
 
       // 6. Process each contact for this step
       // Use quota distribution if available (same as processFullCampaign), otherwise fall back to dynamic scheduling
-      
+
       // Get user's daily quota limit for fallback
       const quotaStats = await this.rateLimiterService.getQuotaStats(userId);
       const dailyLimit = quotaStats.limit;
-      
+
       // Track scheduling state (for fallback when quotaDistribution is not available)
       let emailsScheduled = 0;
       let currentDay = 0;
@@ -861,7 +915,7 @@ export class CampaignProcessorProcessor extends WorkerHost {
       let currentDayStart: Date;
       let currentDayEnd: Date;
       let firstEmailTimeOnDay0: Date | null = null; // Track first email time on day 0 for time continuation
-      
+
       // Get timezone from step
       const timezone = step.timezone || 'UTC';
 
@@ -871,36 +925,36 @@ export class CampaignProcessorProcessor extends WorkerHost {
         const dayEnd = getMidnightInTimezone(dayOffset + 1, timezone);
         return { start: dayStart, end: dayEnd };
       };
-      
+
       // Initialize first day (for fallback)
       const firstDayBounds = getDayBoundaries(0);
       currentDayStart = firstDayBounds.start;
       currentDayEnd = firstDayBounds.end;
-      
+
       // Get already queued emails for first day (for fallback)
       const queuedForFirstDay = await this.emailSenderQueue.countQueuedEmailsForDay(
         userId,
         currentDayStart,
         currentDayEnd,
       );
-      
+
       // Calculate remaining quota for first day (for fallback)
       const sentToday = quotaStats.used;
       const remainingToday = Math.max(0, dailyLimit - sentToday - queuedForFirstDay);
-      
+
       let remainingOnCurrentDay = remainingToday;
-      
+
       // Check if we should use quota distribution
       const useQuotaDistribution = quotaDistribution && !step.replyToStepId;
-      
+
       // Pre-calculate last scheduled email time from previous steps for each day in distribution
       // This ensures new steps start after the last step's last email time (similar to resume)
       let lastScheduledTimeByDayFromPreviousSteps = new Map<number, Date>();
       const firstEmailTimeByDay = new Map<number, Date>();
-      
+
       if (useQuotaDistribution && step.stepOrder > 1) {
         // Use optimized batch query instead of per-day queries (OPTIMIZATION: Issue #5)
-        const maxDay = quotaDistribution.length > 0 
+        const maxDay = quotaDistribution.length > 0
           ? Math.max(...quotaDistribution.map((d: { day: number }) => d.day))
           : 30;
         lastScheduledTimeByDayFromPreviousSteps = await this.campaignSchedulingService.getLastScheduledTimeByDay(
@@ -909,7 +963,7 @@ export class CampaignProcessorProcessor extends WorkerHost {
           maxDay,
         );
       }
-      
+
       if (useQuotaDistribution) {
         this.logger.log(
           `📅 Using quota distribution for step ${stepId}: ${quotaDistribution.length} days, ` +
@@ -922,14 +976,14 @@ export class CampaignProcessorProcessor extends WorkerHost {
           `Queued for today: ${queuedForFirstDay}, Remaining today: ${remainingOnCurrentDay}`
         );
       }
-      
+
       // Load template once before processing contacts (OPTIMIZATION: Issue #8)
       const template = await this.emailTemplateModel.findByPk(step.templateId);
       if (!template) {
         this.logger.error(`Template ${step.templateId} not found for step ${step.id}`);
         throw new Error(`Template ${step.templateId} not found for step ${step.id}`);
       }
-      
+
       // Process contacts in batches using batch loading (OPTIMIZATION: Issue #2 & #6)
       const CONTACT_BATCH_SIZE = 1000; // Load 1000 contacts at a time from database
       const PROCESSING_BATCH_SIZE = 500; // Process 500 contacts at a time for email creation
@@ -948,7 +1002,7 @@ export class CampaignProcessorProcessor extends WorkerHost {
         campaignName: string;
         stepName: string;
       }> = [];
-      
+
       // Track state across batches
       let batchState = {
         currentDay,
@@ -958,12 +1012,12 @@ export class CampaignProcessorProcessor extends WorkerHost {
         currentDayEnd,
         firstEmailTimeOnDay0,
       };
-      
+
       // Track global contact index across all contact batches
       let globalContactIndex = 0;
       // Check for contacts that bounced or unsubscribed in ANY step of this campaign (to exclude them)
       let excludedContactIds: Set<string> | null = null;
-      
+
       // Get all steps in the campaign except the current one
       const allCampaignSteps = await this.campaignStepModel.findAll({
         where: {
@@ -1027,7 +1081,7 @@ export class CampaignProcessorProcessor extends WorkerHost {
       }
 
       let contactBatchNumber = 0;
-      
+
       // Load and process contacts in batches (OPTIMIZATION: Issue #2)
       for await (const contactBatch of this.loadContactsInBatches(
         campaign.contactListId,
@@ -1038,7 +1092,7 @@ export class CampaignProcessorProcessor extends WorkerHost {
         this.logger.log(
           `📥 Loaded contact batch ${contactBatchNumber} (${contactBatch.length} contacts)`
         );
-        
+
         // Filter contacts if reply-to-step is configured
         let filteredContacts = contactBatch;
         if (contactFilter) {
@@ -1059,12 +1113,12 @@ export class CampaignProcessorProcessor extends WorkerHost {
             );
           }
         }
-        
+
         if (filteredContacts.length === 0) {
           this.logger.debug(`No eligible contacts in batch ${contactBatchNumber}, skipping`);
           continue;
         }
-        
+
         // Bulk check for existing emails for this contact batch (OPTIMIZATION: Issue #1)
         const contactIds = filteredContacts.map(c => c.id);
         const existingEmails = await this.emailMessageModel.findAll({
@@ -1079,19 +1133,19 @@ export class CampaignProcessorProcessor extends WorkerHost {
         existingEmails.forEach(email => {
           existingEmailMap.set(email.contactId, email);
         });
-        
+
         // Process this contact batch in smaller processing batches (sequential to maintain state)
         for (let batchStart = 0; batchStart < filteredContacts.length; batchStart += PROCESSING_BATCH_SIZE) {
           const batchEnd = Math.min(batchStart + PROCESSING_BATCH_SIZE, filteredContacts.length);
           const processingBatch = filteredContacts.slice(batchStart, batchEnd);
           const processingBatchNumber = Math.floor(batchStart / PROCESSING_BATCH_SIZE) + 1;
           const totalProcessingBatches = Math.ceil(filteredContacts.length / PROCESSING_BATCH_SIZE);
-          
+
           this.logger.log(
             `📦 Processing batch ${processingBatchNumber}/${totalProcessingBatches} of contact batch ${contactBatchNumber} ` +
             `(contacts ${globalContactIndex + 1}-${globalContactIndex + processingBatch.length} total)`
           );
-          
+
           try {
             const batchResult = await this.processContactBatch(
               processingBatch,
@@ -1117,16 +1171,16 @@ export class CampaignProcessorProcessor extends WorkerHost {
               dailyLimit,
               getDayBoundaries,
             );
-            
+
             totalQueuedCount += batchResult.created;
             totalSkippedCount += batchResult.skipped;
             totalErrorCount += batchResult.errors;
             allJobsToQueue.push(...batchResult.jobs);
-            
+
             // Update state for next batch
             batchState = batchResult.updatedState;
             globalContactIndex += processingBatch.length;
-            
+
             this.logger.log(
               `✅ Processing batch ${processingBatchNumber}/${totalProcessingBatches} completed: ` +
               `Created ${batchResult.created}, Skipped ${batchResult.skipped}, Errors ${batchResult.errors}`
@@ -1140,7 +1194,7 @@ export class CampaignProcessorProcessor extends WorkerHost {
           }
         }
       }
-      
+
       // Batch queue all jobs at once (OPTIMIZATION: Issue #6)
       if (allJobsToQueue.length > 0) {
         this.logger.log(`📤 Batch queueing ${allJobsToQueue.length} email jobs`);
@@ -1149,16 +1203,16 @@ export class CampaignProcessorProcessor extends WorkerHost {
           `✅ Queued ${queueResult.queued} email jobs, ${queueResult.errors} errors`
         );
       }
-      
+
       queuedCount = totalQueuedCount;
       skippedCount = totalSkippedCount;
       errorCount = totalErrorCount;
-      
+
       // Batch processing complete (OPTIMIZATION: Issue #6)
 
       const totalProcessed = queuedCount + skippedCount + errorCount;
       const totalContactsProcessed = globalContactIndex;
-      
+
       // Count actual emails created for this step (total expected)
       const totalEmailsCreated = await this.emailMessageModel.count({
         where: {
@@ -1237,12 +1291,12 @@ export class CampaignProcessorProcessor extends WorkerHost {
       const totalExpected = await this.emailMessageModel.count({
         where: { campaignStepId: stepId }
       });
-      
+
       if (totalExpected === 0) {
         this.logger.debug(`Step ${stepId} has no emails, not considered completed`);
         return false;
       }
-      
+
       // Count emails that are SENT or DELIVERED
       const completed = await this.emailMessageModel.count({
         where: {
@@ -1250,7 +1304,7 @@ export class CampaignProcessorProcessor extends WorkerHost {
           status: { [Op.in]: ['SENT', 'DELIVERED'] }
         }
       });
-      
+
       // Check no QUEUED or SENDING emails remain
       const pending = await this.emailMessageModel.count({
         where: {
@@ -1258,15 +1312,15 @@ export class CampaignProcessorProcessor extends WorkerHost {
           status: { [Op.in]: ['QUEUED', 'SENDING'] }
         }
       });
-      
+
       const isCompleted = completed === totalExpected && pending === 0;
-      
+
       if (isCompleted) {
         this.logger.debug(`Step ${stepId} is completed: ${completed}/${totalExpected} emails sent/delivered, ${pending} pending`);
       } else {
         this.logger.debug(`Step ${stepId} is not completed: ${completed}/${totalExpected} emails sent/delivered, ${pending} pending`);
       }
-      
+
       return isCompleted;
     } catch (error) {
       this.logger.error(`Error checking step completion for ${stepId}:`, error);
@@ -1311,7 +1365,7 @@ export class CampaignProcessorProcessor extends WorkerHost {
         );
         throw new Error(`Campaign ${campaignId} is ${campaign.status}, cannot process`);
       }
-      
+
       // Use campaign's organizationId if not provided in job data
       const finalOrganizationId = organizationId || campaign.organizationId;
       this.logger.debug(`Using organizationId: ${finalOrganizationId} (from job: ${organizationId}, from campaign: ${campaign.organizationId})`);
@@ -1332,7 +1386,7 @@ export class CampaignProcessorProcessor extends WorkerHost {
           {
             model: this.contactModel,
             as: 'contact',
-            where: { 
+            where: {
               subscribed: true,
               status: { [Op.not]: 'BOUNCED' }, // Exclude bounced contacts
             },
@@ -1361,9 +1415,9 @@ export class CampaignProcessorProcessor extends WorkerHost {
 
       const contacts = contactMembers
         .map(member => member.contact)
-        .filter(contact => 
-          contact != null && 
-          contact.subscribed !== false && 
+        .filter(contact =>
+          contact != null &&
+          contact.subscribed !== false &&
           contact.status !== 'BOUNCED' // Filter out unsubscribed AND bounced contacts
         );
 
@@ -1414,7 +1468,7 @@ export class CampaignProcessorProcessor extends WorkerHost {
 
       const senderEmail = token.email; // Use the Gmail account email
       this.logger.log(`Found Gmail token with email: ${senderEmail}`);
-      
+
       if (!senderEmail) {
         this.logger.error(`Gmail token found but email is NULL/empty for user ${userId}`);
         throw new Error(`Gmail token email is missing for user ${userId}`);
@@ -1428,12 +1482,12 @@ export class CampaignProcessorProcessor extends WorkerHost {
 
         // Determine which contacts to process for this step
         let stepContacts: Contact[] = contacts;
-        
+
         if (step.replyToStepId && step.replyType) {
           // Filter contacts based on reply-to-step configuration
           this.logger.log(`Step ${step.id} configured to reply to step ${step.replyToStepId} (type: ${step.replyType})`);
-          
-        if (step.replyType === 'CLICKED') {
+
+          if (step.replyType === 'CLICKED') {
             // Only send to contacts who clicked BUT did NOT reply
             // First, get contacts who clicked
             const clickedEmails = await this.emailMessageModel.findAll({
@@ -1445,14 +1499,14 @@ export class CampaignProcessorProcessor extends WorkerHost {
               attributes: ['contactId'],
               group: ['contactId'],
             });
-            
+
             const clickedContactIds = clickedEmails.map((email: any) => email.contactId);
-            
+
             if (clickedContactIds.length === 0) {
               this.logger.warn(`No contacts clicked in step ${step.replyToStepId}, skipping step ${step.id}`);
               continue; // Skip this step
             }
-            
+
             // Now exclude contacts who replied (higher engagement)
             const repliedEmails = await this.emailMessageModel.findAll({
               where: {
@@ -1463,17 +1517,17 @@ export class CampaignProcessorProcessor extends WorkerHost {
               attributes: ['contactId'],
               group: ['contactId'],
             });
-            
+
             const repliedContactIds = repliedEmails.map((email: any) => email.contactId);
-            
+
             // Filter to contacts who clicked BUT did NOT reply
-            stepContacts = contacts.filter(contact => 
+            stepContacts = contacts.filter(contact =>
               clickedContactIds.includes(contact.id) &&
               !repliedContactIds.includes(contact.id) &&
               contact.subscribed !== false &&
               contact.status !== 'BOUNCED'
             );
-            
+
             if (stepContacts.length === 0) {
               this.logger.warn(`No eligible contacts found for CLICKED filter (all clicked contacts also replied), skipping step ${step.id}`);
               continue;
@@ -1490,14 +1544,14 @@ export class CampaignProcessorProcessor extends WorkerHost {
               attributes: ['contactId'],
               group: ['contactId'],
             });
-            
+
             const openedContactIds = openedEmails.map((email: any) => email.contactId);
-            
+
             if (openedContactIds.length === 0) {
               this.logger.warn(`No contacts opened emails in step ${step.replyToStepId}, skipping step ${step.id}`);
               continue; // Skip this step
             }
-            
+
             // Now exclude contacts who clicked
             const clickedEmails = await this.emailMessageModel.findAll({
               where: {
@@ -1508,9 +1562,9 @@ export class CampaignProcessorProcessor extends WorkerHost {
               attributes: ['contactId'],
               group: ['contactId'],
             });
-            
+
             const clickedContactIds = clickedEmails.map((email: any) => email.contactId);
-            
+
             // And exclude contacts who replied
             const repliedEmails = await this.emailMessageModel.findAll({
               where: {
@@ -1521,29 +1575,73 @@ export class CampaignProcessorProcessor extends WorkerHost {
               attributes: ['contactId'],
               group: ['contactId'],
             });
-            
+
             const repliedContactIds = repliedEmails.map((email: any) => email.contactId);
-            
+
             // Filter to contacts who opened BUT did NOT click or reply
-            stepContacts = contacts.filter(contact => 
+            stepContacts = contacts.filter(contact =>
               openedContactIds.includes(contact.id) &&
               !clickedContactIds.includes(contact.id) &&
               !repliedContactIds.includes(contact.id) &&
               contact.subscribed !== false &&
               contact.status !== 'BOUNCED'
             );
-            
+
             if (stepContacts.length === 0) {
               this.logger.warn(`No eligible contacts found for OPENED filter (all opened contacts also clicked or replied), skipping step ${step.id}`);
               continue;
             }
+          } else if (step.replyType === 'SENT') {
+            // Send to ALL contacts who were sent an email in the previous step, EXCEPT bounced ones
+            const sentEmails = await this.emailMessageModel.findAll({
+              where: {
+                campaignId: campaign.id,
+                campaignStepId: step.replyToStepId,
+                status: { [Op.notIn]: [EmailMessageStatus.BOUNCED] },
+              },
+              attributes: ['contactId'],
+              group: ['contactId'],
+            });
+
+            const sentContactIds = sentEmails.map((email: any) => email.contactId);
+
+            if (sentContactIds.length === 0) {
+              this.logger.warn(`No contacts were sent emails in step ${step.replyToStepId}, skipping step ${step.id}`);
+              continue; // Skip this step
+            }
+
+            // Exclude contacts who replied (higher engagement)
+            const repliedEmails = await this.emailMessageModel.findAll({
+              where: {
+                campaignId: campaign.id,
+                campaignStepId: step.replyToStepId,
+                replyCount: { [Op.gt]: 0 },
+              },
+              attributes: ['contactId'],
+              group: ['contactId'],
+            });
+
+            const repliedContactIds = repliedEmails.map((email: any) => email.contactId);
+
+            // Filter to contacts who were sent but did NOT bounce and did NOT reply
+            stepContacts = contacts.filter(contact =>
+              sentContactIds.includes(contact.id) &&
+              !repliedContactIds.includes(contact.id) &&
+              contact.subscribed !== false &&
+              contact.status !== 'BOUNCED'
+            );
+
+            if (stepContacts.length === 0) {
+              this.logger.warn(`No eligible contacts for SENT filter (all sent contacts bounced or replied), skipping step ${step.id}`);
+              continue;
+            }
           }
-          
+
           if (stepContacts.length === 0) {
             this.logger.warn(`No eligible contacts found for step ${step.id} (reply-to-step: ${step.replyToStepId}), skipping`);
             continue; // Skip this step
           }
-          
+
           this.logger.log(`Step ${step.id} will process ${stepContacts.length} contacts (filtered by reply-to-step ${step.replyToStepId})`);
         }
 
@@ -1553,7 +1651,7 @@ export class CampaignProcessorProcessor extends WorkerHost {
           this.logger.warn(`Template ${step.templateId} not found for step ${step.id}`);
           continue; // Skip this step if template not found
         }
-        
+
         // Bulk check for existing emails to avoid N+1 queries (OPTIMIZATION: Issue #1)
         const stepContactIds = stepContacts.map(c => c.id);
         const existingEmailsForStep = await this.emailMessageModel.findAll({
@@ -1577,7 +1675,7 @@ export class CampaignProcessorProcessor extends WorkerHost {
           // Use quota distribution for normal steps (not reply steps, as contacts might be filtered)
           let globalEmailIndex: number | undefined;
           let effectiveQuotaDistribution: typeof quotaDistribution = null;
-          
+
           if (quotaDistribution && !step.replyToStepId) {
             // Calculate global email index: (stepOrder - 1) * totalContactsPerStep + originalContactIndex
             // Find original contact index in full contacts array
@@ -1587,13 +1685,13 @@ export class CampaignProcessorProcessor extends WorkerHost {
               effectiveQuotaDistribution = quotaDistribution;
             }
           }
-          
+
           // Find which day this email belongs to
           const dayDistribution = effectiveQuotaDistribution?.find(
             (d: { day: number; startIndex: number; endIndex: number }) =>
               globalEmailIndex >= d.startIndex && globalEmailIndex <= d.endIndex
           );
-          
+
           let sendAt: Date;
           if (dayDistribution) {
             // Use unified scheduling service to calculate send time
@@ -1638,7 +1736,7 @@ export class CampaignProcessorProcessor extends WorkerHost {
           this.logger.debug(`Creating email message for contact ${contact.id}, step ${step.id}`);
           this.logger.debug(`Data: subject="${personalized.subject}", sentFromEmail="${senderEmail}"`);
           this.logger.debug(`Full data: organizationId=${finalOrganizationId}, campaignId=${campaign.id}, campaignStepId=${step.id}, contactId=${contact.id}`);
-          
+
           let emailMessage;
           try {
             emailMessage = await this.emailMessageModel.create({
@@ -1655,7 +1753,7 @@ export class CampaignProcessorProcessor extends WorkerHost {
               sentFromEmail: senderEmail, // Use the actual Gmail account email
               createdBy: userId, // Store the user who created the campaign (and thus the email)
             });
-            
+
             this.logger.debug(`✅ Email message created successfully: ${emailMessage.id}`);
           } catch (createError: any) {
             this.logger.error(`❌ Failed to create email message. Error: ${createError.message}`);
@@ -1777,10 +1875,10 @@ export class CampaignProcessorProcessor extends WorkerHost {
   ): Date {
     // Get timezone from step (default to UTC)
     const timezone = step.timezone || 'UTC';
-    
+
     // Determine base start time for this step
     let baseTime: Date;
-    
+
     if (step.triggerType === 'SCHEDULE' && step.scheduleTime) {
       // SCHEDULE: Start at the specified schedule time
       baseTime = new Date(step.scheduleTime);
@@ -1800,14 +1898,14 @@ export class CampaignProcessorProcessor extends WorkerHost {
         // Calculate base time for the target day in step timezone
         const targetDayBaseTime = getMidnightInTimezone(dayDistribution.day, timezone);
         const now = new Date();
-        
+
         // For new days: Always start from 12:01 AM (midnight + 1 minute)
         const targetDayBaseTimeWithOffset = new Date(targetDayBaseTime.getTime() + 60 * 1000); // +1 minute = 12:01 AM
 
         // Calculate within-day delay based on email's position within the day
         const emailIndexWithinDay = globalEmailIndex - dayDistribution.startIndex;
         const delayMinutes = step.delayMinutes || 1;
-        
+
         // Determine effective base time:
         // - If this is the first email on this day AND we have a lastScheduledTimeOnThisDay from previous steps,
         //   start after the previous step's last email on this day
@@ -1815,10 +1913,10 @@ export class CampaignProcessorProcessor extends WorkerHost {
         // - For future days: Always start from 12:01 AM (midnight + 1 minute)
         let effectiveBaseTime: Date;
         const isFirstEmailOnDay = emailIndexWithinDay === 0;
-        
+
         // Look up the last scheduled time from previous steps for this specific day
         const lastScheduledTimeOnThisDay = lastScheduledTimeByDayFromPreviousSteps?.get(dayDistribution.day) || null;
-        
+
         this.logger.debug(
           `📅 Calculating send time for email ${globalEmailIndex}: ` +
           `emailIndexWithinDay=${emailIndexWithinDay}, ` +
@@ -1826,7 +1924,7 @@ export class CampaignProcessorProcessor extends WorkerHost {
           `lastScheduledTimeOnThisDay=${lastScheduledTimeOnThisDay ? lastScheduledTimeOnThisDay.toISOString() : 'null'}, ` +
           `isFirstEmailOnDay=${isFirstEmailOnDay}`
         );
-        
+
         if (isFirstEmailOnDay && lastScheduledTimeOnThisDay) {
           // First email on this day - start after the previous step's last email on this day
           // Base time = last scheduled time + delayMinutes (so first email starts after it)
@@ -1898,7 +1996,7 @@ export class CampaignProcessorProcessor extends WorkerHost {
 
         const totalDelayMs = emailIndexWithinDay * delayMinutes * 60 * 1000;
         const finalSendTime = new Date(effectiveBaseTime.getTime() + totalDelayMs);
-        
+
         // Debug logging for quota distribution scheduling
         const moment = require('moment-timezone');
         const sendTimeTZ = moment.utc(finalSendTime).tz(timezone);
@@ -1911,7 +2009,7 @@ export class CampaignProcessorProcessor extends WorkerHost {
           `sendAt UTC: ${finalSendTime.toISOString()}, ` +
           `sendAt ${timezone}: ${sendTimeTZ.format('DD MMM YYYY HH:mm:ss z')})`
         );
-        
+
         return finalSendTime;
       } else {
         // Log if quota distribution exists but no day found for this email index
@@ -1943,7 +2041,7 @@ export class CampaignProcessorProcessor extends WorkerHost {
   ): void {
     // Progress emission disabled
     return;
-    
+
     /* DISABLED CODE - Uncomment to re-enable progress emission
     const now = Date.now();
 

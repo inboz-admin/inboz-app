@@ -83,7 +83,7 @@ export class EmailSenderProcessor extends WorkerHost {
       this.logger.log(`🔍 [FETCH] Fetching campaign by ID: ${campaignId}`);
       const campaign = await this.campaignModel.findByPk(campaignId);
       this.logger.log(`🔍 [FETCH] Campaign fetched: ${campaign ? `Found (status: ${campaign.status})` : 'Not found'}`);
-      
+
       if (campaign && campaign.status !== 'ACTIVE') {
         this.logger.warn(
           `Campaign ${campaignId} is ${campaign.status}, cancelling email ${emailMessageId}`
@@ -92,7 +92,7 @@ export class EmailSenderProcessor extends WorkerHost {
         this.logger.log(`🔍 [FETCH] Fetching email message by ID: ${emailMessageId}`);
         const emailMessage = await this.emailMessageModel.findByPk(emailMessageId);
         this.logger.log(`🔍 [FETCH] Email message fetched: ${emailMessage ? `Found (status: ${emailMessage.status})` : 'Not found'}`);
-        
+
         if (emailMessage && emailMessage.status !== EmailMessageStatus.CANCELLED) {
           await emailMessage.update({ status: EmailMessageStatus.CANCELLED });
         }
@@ -105,18 +105,18 @@ export class EmailSenderProcessor extends WorkerHost {
         // Smart quota-exceeded handling: Reschedule job instead of throwing error
         try {
           // Get original send time from job data
-          const originalSendTime = job.data.sendAt 
+          const originalSendTime = job.data.sendAt
             ? new Date(job.data.sendAt)
             : new Date();
-          
+
           // Get quota reset time
           const quotaStats = await this.rateLimiterService.getQuotaStats(userId);
           const quotaResetTime = quotaStats.resetAt;
-          
+
           // Calculate reschedule time: max of (original time, quota reset) + 1 hour buffer
           const now = new Date();
           const bufferMs = 60 * 60 * 1000; // 1 hour buffer
-          
+
           let rescheduleTime: Date;
           if (originalSendTime > quotaResetTime) {
             // Original time is in future, after quota reset - use original time + buffer
@@ -125,17 +125,17 @@ export class EmailSenderProcessor extends WorkerHost {
             // Quota reset happens before or at original time - use quota reset + buffer
             rescheduleTime = new Date(quotaResetTime.getTime() + bufferMs);
           }
-          
+
           // Ensure reschedule time is in future
           if (rescheduleTime <= now) {
             rescheduleTime = new Date(now.getTime() + bufferMs);
           }
-          
+
           const delayMs = rescheduleTime.getTime() - now.getTime();
-          
+
           // Reschedule job
           await this.emailSenderQueue.rescheduleEmailJob(emailMessageId, delayMs);
-          
+
           // Update email record
           const emailMessage = await this.emailMessageModel.findByPk(emailMessageId);
           if (emailMessage) {
@@ -145,13 +145,13 @@ export class EmailSenderProcessor extends WorkerHost {
               errorMessage: `Quota exceeded. Rescheduled to ${rescheduleTime.toISOString()}`,
             });
           }
-          
+
           this.logger.log(
             `Quota exceeded for user ${userId}. Rescheduled email ${emailMessageId} ` +
             `from ${originalSendTime.toISOString()} to ${rescheduleTime.toISOString()} ` +
             `(delay: ${Math.round(delayMs / 1000)}s)`
           );
-          
+
           // Return success (don't throw - prevents retry exhaustion)
           return {
             success: true,
@@ -168,7 +168,7 @@ export class EmailSenderProcessor extends WorkerHost {
             err.stack,
           );
           // Fallback: throw error to let BullMQ retry (existing behavior)
-        throw new Error('QUOTA_EXCEEDED: Daily email limit reached. Retrying later.');
+          throw new Error('QUOTA_EXCEEDED: Daily email limit reached. Retrying later.');
         }
       }
 
@@ -252,13 +252,13 @@ export class EmailSenderProcessor extends WorkerHost {
         this.logger.warn(
           `Contact ${emailMessage.contactId} is ${emailMessage.contact.subscribed === false ? 'unsubscribed' : 'bounced'}, cancelling email ${emailMessageId}`
         );
-        await emailMessage.update({ 
+        await emailMessage.update({
           status: EmailMessageStatus.CANCELLED,
           errorMessage: `Contact is ${emailMessage.contact.subscribed === false ? 'unsubscribed' : 'bounced'}`,
         });
-        return { 
-          success: false, 
-          reason: `Contact is ${emailMessage.contact.subscribed === false ? 'unsubscribed' : 'bounced'}` 
+        return {
+          success: false,
+          reason: `Contact is ${emailMessage.contact.subscribed === false ? 'unsubscribed' : 'bounced'}`
         };
       }
 
@@ -273,7 +273,7 @@ export class EmailSenderProcessor extends WorkerHost {
       this.logger.log(`🔍 [FETCH] Fetching user by ID: ${userId}`);
       const user = await this.userModel.findByPk(userId);
       this.logger.log(`🔍 [FETCH] User fetched: ${user ? `Found (firstName: ${user.firstName || 'N/A'}, lastName: ${user.lastName || 'N/A'})` : 'Not found'}`);
-      
+
       const fromName = user?.firstName && user?.lastName
         ? `${user.firstName} ${user.lastName}`.trim()
         : user?.firstName || user?.lastName || undefined;
@@ -294,7 +294,7 @@ export class EmailSenderProcessor extends WorkerHost {
         // HTML format: send HTML content only
         finalHtml = emailMessage.htmlContent;
         finalText = undefined; // Don't send text content
-        
+
         // Always inject tracking/unsubscribe (unsubscribe is required for compliance)
         // Even if all tracking is disabled, we still add unsubscribe link
         finalHtml = this.emailTrackingService.injectTracking(
@@ -308,7 +308,7 @@ export class EmailSenderProcessor extends WorkerHost {
           unsubscribeCustomMessage,
         );
         this.logger.debug(`📧 HTML injected, new length: ${finalHtml.length}, original: ${emailMessage.htmlContent.length}`);
-        
+
         this.logger.debug(`📧 Using HTML format - HTML content length: ${finalHtml.length}`);
       } else {
         // TEXT format: textContent contains HTML (converted from plain text with links)
@@ -317,7 +317,7 @@ export class EmailSenderProcessor extends WorkerHost {
         const textHasHtml = emailMessage.textContent && /<[a-z][\s\S]*>/i.test(emailMessage.textContent);
         const htmlContent = emailMessage.htmlContent || '';
         const htmlHasContent = htmlContent && htmlContent.trim().length > 0;
-        
+
         if (textHasHtml) {
           // textContent contains HTML - always inject tracking/unsubscribe (unsubscribe is required)
           finalHtml = this.emailTrackingService.injectTracking(
@@ -350,7 +350,7 @@ export class EmailSenderProcessor extends WorkerHost {
           // Plain text in textContent - always inject unsubscribe (required for compliance)
           finalHtml = undefined;
           finalText = emailMessage.textContent || '';
-          
+
           // Always inject unsubscribe, even if other tracking is disabled
           finalText = this.emailTrackingService.injectTextTracking(
             emailMessage.textContent || '',
@@ -371,14 +371,14 @@ export class EmailSenderProcessor extends WorkerHost {
       let finalSubject = emailMessage.subject; // Default to template subject
       let isReplyEmail = false;
       let replyToMessageId: string | null = null; // Clean Message-ID of the email being replied to (for replyMessageId column)
-      
+
       // Load the step to check if it's configured to reply to a previous step
       this.logger.log(`🔍 [FETCH] Fetching campaign step by ID: ${campaignStepId} (attributes: replyToStepId, replyType, stepOrder)`);
       const step = await this.campaignStepModel.findByPk(campaignStepId, {
         attributes: ['replyToStepId', 'replyType', 'stepOrder'],
       });
       this.logger.log(`🔍 [FETCH] Campaign step fetched: ${step ? `Found (stepOrder: ${step.stepOrder}, replyToStepId: ${step.replyToStepId || 'null'}, replyType: ${step.replyType || 'null'})` : 'Not found'}`);
-      
+
       // Find all previous emails for this contact in this campaign
       this.logger.log(`🔍 [FETCH] Fetching previous emails (campaignId: ${campaignId}, contactId: ${emailMessage.contactId}, status: SENT/DELIVERED)`);
       const previousEmails = await this.emailMessageModel.findAll({
@@ -409,10 +409,10 @@ export class EmailSenderProcessor extends WorkerHost {
       if (earlierEmails.length > 0 && step?.replyToStepId) {
         isReplyEmail = true;
         // Find the email from the specific step we're replying to
-        const replyToEmail = earlierEmails.find((email: any) => 
+        const replyToEmail = earlierEmails.find((email: any) =>
           email.campaignStepId === step.replyToStepId
         );
-        
+
         if (!replyToEmail) {
           this.logger.warn(
             `Email from step ${step.replyToStepId} not found for contact ${emailMessage.contactId}. Sending as new thread.`
@@ -426,14 +426,14 @@ export class EmailSenderProcessor extends WorkerHost {
           // For Gmail, we need to use the actual Gmail threadId (not messageId)
           // The threadId should be the same for all emails in a thread
           const previousThreadId = replyToEmail.gmailThreadId || replyToEmail.gmailMessageId;
-          
+
           this.logger.log(
             `🔍 [THREADING DEBUG] Found previous email for reply: ` +
             `messageId=${replyToEmail.gmailMessageId}, ` +
             `threadId=${replyToEmail.gmailThreadId}, ` +
             `will use threadId=${previousThreadId}`
           );
-          
+
           if (!previousThreadId) {
             this.logger.warn(
               `No gmailThreadId or gmailMessageId found for reply email. Cannot thread.`
@@ -443,7 +443,7 @@ export class EmailSenderProcessor extends WorkerHost {
             // The stored gmailMessageId is the internal ID (result.id), not the Message-ID header
             // We need to fetch the clean Message-ID header from Gmail for threading
             let cleanMessageId = replyToEmail.gmailMessageId; // This is the internal ID
-            
+
             // Fetch the clean Message-ID header from the previous email for threading
             // This is critical for proper threading - we need the actual Message-ID header
             try {
@@ -452,7 +452,7 @@ export class EmailSenderProcessor extends WorkerHost {
               fetchOAuth2Client.setCredentials({
                 access_token: accessToken,
               });
-              
+
               // Fetch the clean Message-ID header from the previous email
               const gmail = google.gmail({ version: 'v1', auth: fetchOAuth2Client });
               this.logger.log(`🔍 [FETCH] Fetching clean Message-ID header from previous email (internal ID: ${cleanMessageId})`);
@@ -467,20 +467,20 @@ export class EmailSenderProcessor extends WorkerHost {
               // Fallback: use threadId (Gmail will still thread by threadId, but headers won't be perfect)
               cleanMessageId = replyToEmail.gmailThreadId || replyToEmail.gmailMessageId || '';
             }
-            
+
             // Store the clean Message-ID of the email being replied to (for replyMessageId column)
             replyToMessageId = cleanMessageId; // This is the clean Message-ID header of the email we're replying to
-            
+
             // Reference: Wrap clean Message-ID in < > brackets when using in headers
             // In-Reply-To: <${parentMsgId}>
             // References: <${parentMsgId}>
             const inReplyTo = `<${cleanMessageId}>`;
             const references = `<${cleanMessageId}>`;
-            
+
             this.logger.log(
               `📧 [MESSAGE-ID FORMAT] Using for In-Reply-To: ${inReplyTo}, References: ${references}`
             );
-            
+
             // CRITICAL: Use gmailThreadId (not gmailMessageId) for threading
             // All emails in the same thread should share the same threadId
             // Reference: threadId is passed in requestBody, inReplyTo and references in headers
@@ -490,20 +490,20 @@ export class EmailSenderProcessor extends WorkerHost {
               references: references, // Actual Gmail Message-ID header (includes < > brackets)
               threadId: previousThreadId, // This will be passed to Gmail API as threadId parameter in requestBody
             };
-            
+
             this.logger.log(
               `🔗 [THREADING] Using threadId: ${previousThreadId} from previous email (messageId: ${replyToEmail.gmailMessageId})`
             );
-            
+
             // Use first email's subject exactly as-is (no "Re: " prefix)
             // Gmail threads by subject matching, so we need the exact same subject
             // Find the first email in the thread to get the original subject
             const firstEmail = earlierEmails[0]; // First email in the thread
-            
+
             this.logger.log(
               `🔍 [THREADING DEBUG] Found ${earlierEmails.length} earlier emails. First email subject: "${firstEmail?.subject || 'N/A'}", Reply-to email subject: "${replyToEmail.subject || 'N/A'}"`
             );
-            
+
             if (firstEmail && firstEmail.subject) {
               // Use the exact same subject as the first email (no modifications)
               finalSubject = firstEmail.subject.trim();
@@ -517,7 +517,7 @@ export class EmailSenderProcessor extends WorkerHost {
                 `📧 [SUBJECT] Using reply-to email's subject exactly as-is: "${finalSubject}"`
               );
             }
-            
+
             this.logger.debug(
               `Setting thread headers for reply to step ${step.replyToStepId}: In-Reply-To: ${threadHeaders.inReplyTo}, References: ${references.substring(0, 100)}..., Thread-Id: ${threadHeaders.threadId}`
             );
@@ -527,108 +527,108 @@ export class EmailSenderProcessor extends WorkerHost {
       // Note: Only explicit reply steps (with replyToStepId) are threaded together
       // Regular sequential steps will create new threads
 
-        // 12. Re-check campaign status right before sending (ACID fix: prevents race condition)
-        // This ensures no emails are sent if campaign was paused between initial check and send
-        const campaignStatusCheck = await this.campaignModel.findByPk(campaignId, {
-          attributes: ['id', 'status'],
+      // 12. Re-check campaign status right before sending (ACID fix: prevents race condition)
+      // This ensures no emails are sent if campaign was paused between initial check and send
+      const campaignStatusCheck = await this.campaignModel.findByPk(campaignId, {
+        attributes: ['id', 'status'],
+      });
+
+      if (!campaignStatusCheck || campaignStatusCheck.status !== 'ACTIVE') {
+        this.logger.warn(
+          `Campaign ${campaignId} status changed to ${campaignStatusCheck?.status || 'NOT_FOUND'} before send. Cancelling email ${emailMessageId}`
+        );
+        await emailMessage.update({
+          status: EmailMessageStatus.CANCELLED,
+          errorMessage: `Campaign status is ${campaignStatusCheck?.status || 'NOT_FOUND'}`,
         });
-        
-        if (!campaignStatusCheck || campaignStatusCheck.status !== 'ACTIVE') {
-          this.logger.warn(
-            `Campaign ${campaignId} status changed to ${campaignStatusCheck?.status || 'NOT_FOUND'} before send. Cancelling email ${emailMessageId}`
+        return {
+          success: false,
+          reason: `Campaign is ${campaignStatusCheck?.status || 'NOT_FOUND'}`
+        };
+      }
+
+      // 13. Send email via Gmail API
+      try {
+        // Log thread headers being sent
+        if (threadHeaders) {
+          this.logger.log(
+            `📧 [THREADING] Sending email ${emailMessageId} with thread headers: ` +
+            `In-Reply-To: ${threadHeaders.inReplyTo}, ` +
+            `References: ${threadHeaders.references?.substring(0, 100)}..., ` +
+            `Thread-Id: ${threadHeaders.threadId}`
           );
-          await emailMessage.update({ 
-            status: EmailMessageStatus.CANCELLED,
-            errorMessage: `Campaign status is ${campaignStatusCheck?.status || 'NOT_FOUND'}`,
-          });
-          return { 
-            success: false, 
-            reason: `Campaign is ${campaignStatusCheck?.status || 'NOT_FOUND'}` 
-          };
+        } else {
+          this.logger.log(`📧 [THREADING] Sending email ${emailMessageId} without thread headers (new thread)`);
         }
 
-        // 13. Send email via Gmail API
-        try {
-          // Log thread headers being sent
-          if (threadHeaders) {
-            this.logger.log(
-              `📧 [THREADING] Sending email ${emailMessageId} with thread headers: ` +
-              `In-Reply-To: ${threadHeaders.inReplyTo}, ` +
-              `References: ${threadHeaders.references?.substring(0, 100)}..., ` +
-              `Thread-Id: ${threadHeaders.threadId}`
-            );
-          } else {
-            this.logger.log(`📧 [THREADING] Sending email ${emailMessageId} without thread headers (new thread)`);
+        // Log final subject before sending
+        this.logger.log(
+          `📧 [FINAL SUBJECT] Sending with subject: "${finalSubject}" ` +
+          `(Original template subject: "${emailMessage.subject}")`
+        );
+
+        const result = await this.gmailService.sendEmail({
+          accessToken,
+          to: emailMessage.contact.email,
+          from: token.email, // Use the Gmail account's email
+          fromName, // Display name from user
+          subject: finalSubject, // Use final subject (original for replies, template for new)
+          html: finalHtml, // Use HTML if sendFormat is HTML, undefined otherwise
+          text: finalText, // Use text if sendFormat is TEXT, undefined otherwise
+          threadHeaders, // Include thread headers for threading
+        });
+
+        // Log the exact Gmail API response
+        this.logger.log(
+          `📧 [GMAIL RESPONSE] Email ${emailMessageId} sent successfully. ` +
+          `Response: { id: "${result.id}", threadId: "${result.threadId}", ` +
+          `gmailMessageId: "${result.gmailMessageId || 'N/A'}", ` +
+          `labelIds: [${result.labelIds?.join(', ') || 'none'}] }`
+        );
+
+        // 14. Update status to 'sent' and store Message-IDs
+        // gmailMessageId = Internal Gmail API message ID from send response (result.id)
+        // replyMessageId = Clean Message-ID header fetched via getRealMessageId (if this is a reply)
+        // Store threadId in gmailThreadId column
+
+        // For reply emails, fetch the clean Message-ID header using getRealMessageId
+        let replyMessageIdToStore: string | null = null;
+        if (isReplyEmail && result.id) {
+          try {
+            // Create OAuth2 client for fetching Message-ID
+            const fetchOAuth2Client = new google.auth.OAuth2();
+            fetchOAuth2Client.setCredentials({
+              access_token: accessToken,
+            });
+
+            // Fetch the clean Message-ID header from Gmail
+            const gmail = google.gmail({ version: 'v1', auth: fetchOAuth2Client });
+            this.logger.log(`🔍 [FETCH] Fetching clean Message-ID header for reply email using internal ID: ${result.id}`);
+            const cleanReplyMessageId = await this.gmailService.getRealMessageId(gmail, result.id);
+            replyMessageIdToStore = cleanReplyMessageId;
+            this.logger.log(`📧 [REPLY MESSAGE-ID] Fetched clean Message-ID for reply: "${cleanReplyMessageId}"`);
+          } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            this.logger.warn(`⚠️ [REPLY MESSAGE-ID] Failed to fetch clean Message-ID: ${errorMessage}`);
+            // Fallback: use the stored replyToMessageId if available
+            replyMessageIdToStore = replyToMessageId;
           }
+        }
 
-          // Log final subject before sending
-          this.logger.log(
-            `📧 [FINAL SUBJECT] Sending with subject: "${finalSubject}" ` +
-            `(Original template subject: "${emailMessage.subject}")`
-          );
+        await emailMessage.update({
+          status: EmailMessageStatus.SENT,
+          sentAt: new Date(),
+          gmailMessageId: result.id, // Internal Gmail API message ID from send response
+          gmailThreadId: result.threadId, // Thread ID - stored in gmailThreadId column
+          replyMessageId: replyMessageIdToStore, // Clean Message-ID header (fetched via getRealMessageId) if this is a reply
+          sentFromEmail: token.email,
+        });
 
-          const result = await this.gmailService.sendEmail({
-            accessToken,
-            to: emailMessage.contact.email,
-            from: token.email, // Use the Gmail account's email
-            fromName, // Display name from user
-            subject: finalSubject, // Use final subject (original for replies, template for new)
-            html: finalHtml, // Use HTML if sendFormat is HTML, undefined otherwise
-            text: finalText, // Use text if sendFormat is TEXT, undefined otherwise
-            threadHeaders, // Include thread headers for threading
-          });
-
-          // Log the exact Gmail API response
-          this.logger.log(
-            `📧 [GMAIL RESPONSE] Email ${emailMessageId} sent successfully. ` +
-            `Response: { id: "${result.id}", threadId: "${result.threadId}", ` +
-            `gmailMessageId: "${result.gmailMessageId || 'N/A'}", ` +
-            `labelIds: [${result.labelIds?.join(', ') || 'none'}] }`
-          );
-
-          // 14. Update status to 'sent' and store Message-IDs
-          // gmailMessageId = Internal Gmail API message ID from send response (result.id)
-          // replyMessageId = Clean Message-ID header fetched via getRealMessageId (if this is a reply)
-          // Store threadId in gmailThreadId column
-          
-          // For reply emails, fetch the clean Message-ID header using getRealMessageId
-          let replyMessageIdToStore: string | null = null;
-          if (isReplyEmail && result.id) {
-            try {
-              // Create OAuth2 client for fetching Message-ID
-              const fetchOAuth2Client = new google.auth.OAuth2();
-              fetchOAuth2Client.setCredentials({
-                access_token: accessToken,
-              });
-              
-              // Fetch the clean Message-ID header from Gmail
-              const gmail = google.gmail({ version: 'v1', auth: fetchOAuth2Client });
-              this.logger.log(`🔍 [FETCH] Fetching clean Message-ID header for reply email using internal ID: ${result.id}`);
-              const cleanReplyMessageId = await this.gmailService.getRealMessageId(gmail, result.id);
-              replyMessageIdToStore = cleanReplyMessageId;
-              this.logger.log(`📧 [REPLY MESSAGE-ID] Fetched clean Message-ID for reply: "${cleanReplyMessageId}"`);
-            } catch (error) {
-              const errorMessage = error instanceof Error ? error.message : String(error);
-              this.logger.warn(`⚠️ [REPLY MESSAGE-ID] Failed to fetch clean Message-ID: ${errorMessage}`);
-              // Fallback: use the stored replyToMessageId if available
-              replyMessageIdToStore = replyToMessageId;
-            }
-          }
-          
-          await emailMessage.update({
-            status: EmailMessageStatus.SENT,
-            sentAt: new Date(),
-            gmailMessageId: result.id, // Internal Gmail API message ID from send response
-            gmailThreadId: result.threadId, // Thread ID - stored in gmailThreadId column
-            replyMessageId: replyMessageIdToStore, // Clean Message-ID header (fetched via getRealMessageId) if this is a reply
-            sentFromEmail: token.email,
-          });
-          
-          this.logger.log(
-            `📧 [DB UPDATE] Stored internal Message-ID in gmailMessageId column: "${result.id}", ` +
-            `Thread ID in gmailThreadId column: "${result.threadId}"` +
-            (replyMessageIdToStore ? `, Reply Message-ID in replyMessageId column: "${replyMessageIdToStore}"` : '')
-          );
+        this.logger.log(
+          `📧 [DB UPDATE] Stored internal Message-ID in gmailMessageId column: "${result.id}", ` +
+          `Thread ID in gmailThreadId column: "${result.threadId}"` +
+          (replyMessageIdToStore ? `, Reply Message-ID in replyMessageId column: "${replyMessageIdToStore}"` : '')
+        );
 
         // 15. Increment rate limit counter (after successful send)
         await this.rateLimiterService.incrementQuota(userId);
@@ -765,7 +765,7 @@ export class EmailSenderProcessor extends WorkerHost {
       this.logger.log(`🔍 [FETCH] [COMPLETION CHECK] Fetching campaign by ID: ${campaignId}`);
       const campaign = await this.campaignModel.findByPk(campaignId);
       this.logger.log(`🔍 [FETCH] [COMPLETION CHECK] Campaign fetched: ${campaign ? `Found (status: ${campaign.status})` : 'Not found'}`);
-      
+
       if (!campaign || campaign.status === 'COMPLETED') {
         return; // Already completed or not found
       }
@@ -783,7 +783,7 @@ export class EmailSenderProcessor extends WorkerHost {
       // This excludes newly added steps that haven't been processed yet
       let stepsProcessed = 0;
       let totalExpectedEmails = 0;
-      
+
       for (const step of steps) {
         const stepEmailCount = await this.emailMessageModel.count({
           where: {
@@ -791,7 +791,7 @@ export class EmailSenderProcessor extends WorkerHost {
             campaignStepId: step.id,
           },
         });
-        
+
         if (stepEmailCount > 0) {
           // Step has emails - count it and add to expected emails
           stepsProcessed++;
@@ -806,7 +806,7 @@ export class EmailSenderProcessor extends WorkerHost {
               campaignStepId: step.replyToStepId,
             },
           });
-          
+
           if (previousStepEmails > 0) {
             // Previous step has emails - this reply step was likely attempted but had 0 contacts
             // Count it as processed but don't add to expected emails (it correctly has 0)
@@ -821,7 +821,7 @@ export class EmailSenderProcessor extends WorkerHost {
       if (stepsProcessed === 0) {
         return; // No steps processed yet
       }
-      
+
       if (totalExpectedEmails === 0 && stepsProcessed < steps.length) {
         return; // Some steps haven't been processed yet
       }
@@ -850,22 +850,33 @@ export class EmailSenderProcessor extends WorkerHost {
         },
       });
 
+      // Check for any emails currently being sent (SENDING status)
+      // This prevents a race condition where an email transitions from QUEUED -> SENDING
+      // and disappears from both the "processed" and "queued" counts, causing premature completion
+      const sendingEmails = await this.emailMessageModel.count({
+        where: {
+          campaignId,
+          status: EmailMessageStatus.SENDING,
+        },
+      });
+
       // Only mark as completed if:
       // 1. All expected emails for processed steps have been processed (sent, delivered, failed, bounced, or cancelled)
       // 2. AND there are no remaining queued emails
-      // 3. AND all steps have been processed (stepsProcessed === totalSteps)
+      // 3. AND there are no emails currently being sent
+      // 4. AND all steps have been processed (stepsProcessed === totalSteps)
       // This ensures newly added steps don't cause false completion
       const allStepsProcessed = stepsProcessed === steps.length;
-      
-      if (processedEmails >= totalExpectedEmails && queuedEmails === 0 && allStepsProcessed) {
+
+      if (processedEmails >= totalExpectedEmails && queuedEmails === 0 && sendingEmails === 0 && allStepsProcessed) {
         await this.campaignModel.update(
           { status: 'COMPLETED', completedAt: new Date() },
           { where: { id: campaignId } },
         );
-        
+
         this.logger.log(
           `🎉 Campaign ${campaignId} marked as COMPLETED ` +
-          `(${processedEmails}/${totalExpectedEmails} emails processed, ${queuedEmails} queued, ` +
+          `(${processedEmails}/${totalExpectedEmails} emails processed, ${queuedEmails} queued, ${sendingEmails} sending, ` +
           `${stepsProcessed}/${steps.length} steps processed)`
         );
 
@@ -881,7 +892,7 @@ export class EmailSenderProcessor extends WorkerHost {
       } else {
         this.logger.debug(
           `Campaign ${campaignId} not completed yet: ` +
-          `${processedEmails}/${totalExpectedEmails} processed, ${queuedEmails} queued, ` +
+          `${processedEmails}/${totalExpectedEmails} processed, ${queuedEmails} queued, ${sendingEmails} sending, ` +
           `${stepsProcessed}/${steps.length} steps processed`
         );
       }
@@ -900,7 +911,7 @@ export class EmailSenderProcessor extends WorkerHost {
   private async emitProgress(campaignId: string, campaignStepId: string): Promise<void> {
     // Progress emission disabled
     return;
-    
+
     /* DISABLED CODE - Uncomment to re-enable progress emission
     try {
       const now = Date.now();

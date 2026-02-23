@@ -194,16 +194,18 @@ export class CampaignCrudService implements ICampaignCrudService {
     };
   }
 
-  // Automatically marks campaign as COMPLETED when progress reaches 100% using optimistic locking to prevent race conditions
+  // Automatically marks campaign as COMPLETED when progress reaches 100% and at least one email was sent/delivered (prevents completing when all failed or all cancelled)
   private async markCampaignCompletedIfNeeded(
     campaignId: string,
     percentage: number,
     currentStatus: string,
+    sentOrDeliveredCount: number,
   ): Promise<boolean> {
-    // Only mark as completed if progress is 100% and status is ACTIVE or PAUSED
+    // Only mark as completed if progress is 100%, status is ACTIVE or PAUSED, and at least one email was sent or delivered
     if (
       percentage < 100 ||
-      (currentStatus !== 'ACTIVE' && currentStatus !== 'PAUSED')
+      (currentStatus !== 'ACTIVE' && currentStatus !== 'PAUSED') ||
+      sentOrDeliveredCount < 1
     ) {
       return false;
     }
@@ -294,11 +296,14 @@ export class CampaignCrudService implements ICampaignCrudService {
 
     Object.assign(campaign, campaignProgress);
 
-    // Auto-mark campaign as completed if progress reached 100%
+    // Auto-mark campaign as completed if progress reached 100% and at least one email sent/delivered
+    const sentOrDelivered =
+      (campaignProgress.emailsSent ?? 0) + (campaignProgress.emailsDelivered ?? 0);
     const wasCompleted = await this.markCampaignCompletedIfNeeded(
       campaign.id,
       campaignProgress.progressPercentage,
       campaign.status,
+      sentOrDelivered,
     );
     if (wasCompleted) {
       campaign.status = 'COMPLETED';
@@ -370,10 +375,14 @@ export class CampaignCrudService implements ICampaignCrudService {
 
       Object.assign(campaign, campaignProgress);
 
+      const sentOrDelivered =
+        (campaignProgress.emailsSent ?? 0) +
+        (campaignProgress.emailsDelivered ?? 0);
       const wasCompleted = await this.markCampaignCompletedIfNeeded(
         campaign.id,
         campaignProgress.progressPercentage,
         campaign.status,
+        sentOrDelivered,
       );
       if (wasCompleted) {
         campaign.status = 'COMPLETED';
