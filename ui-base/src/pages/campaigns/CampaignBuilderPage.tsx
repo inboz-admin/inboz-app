@@ -196,10 +196,10 @@ export function CampaignBuilderPage() {
     }
 
     // Load campaign if we have an id
-    // For employees: don't require organizationId (apiService will handle it)
+    // For employees: always load (getById doesn't need organizationId)
     // For regular users: require organizationId
     if (id) {
-      if (!isEmployee || selectedOrganizationId || user?.organizationId) {
+      if (isEmployee || user?.organizationId) {
         loadCampaign();
       }
     } else {

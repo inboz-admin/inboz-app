@@ -20,7 +20,7 @@ export default {
           USERS: ['CREATE', 'READ', 'UPDATE', 'LIST', 'EXPORT'],
           EMPLOYEES: ['CREATE', 'READ', 'UPDATE', 'LIST', 'EXPORT'],
           // Campaign Management
-          CAMPAIGNS: ['READ', 'UPDATE', 'LIST', 'EXPORT'],
+          CAMPAIGNS: ['CREATE', 'READ', 'UPDATE', 'DELETE', 'LIST', 'EXPORT'],
           CONTACTS: ['READ', 'UPDATE', 'LIST', 'EXPORT'],
           CONTACTLISTS: ['READ', 'UPDATE', 'LIST', 'EXPORT'],
           TEMPLATES: ['READ', 'UPDATE', 'LIST', 'EXPORT'],

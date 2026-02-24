@@ -36,7 +36,7 @@ declare module 'express-serve-static-core' {
   }
 }
 
-@Controller('upload')
+@Controller()
 export class MulterController {
   constructor(private readonly multerService: MulterService) {}
 

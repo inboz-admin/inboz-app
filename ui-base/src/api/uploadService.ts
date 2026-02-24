@@ -21,14 +21,6 @@ export interface UploadImageResponse {
 }
 
 /**
- * Get the server base URL (without /api/v1) for upload endpoints.
- * Multer controller is at /upload, not under /api/v1.
- */
-function getUploadBaseUrl(): string {
-  return API_CONFIG.baseUrl.replace(/\/api\/v1\/?$/, "") || API_CONFIG.baseUrl;
-}
-
-/**
  * Upload an image file to the server using the existing Multer module.
  * Uses the same fetch + FormData pattern as useExcelUpload.
  *
@@ -41,7 +33,7 @@ export async function uploadImage(file: File): Promise<UploadedImage> {
     throw new Error("No access token found. Please log in again.");
   }
 
-  const uploadUrl = `${getUploadBaseUrl()}/upload/image`;
+  const uploadUrl = `${API_CONFIG.baseUrl}/upload/image`;
 
   const formData = new FormData();
   formData.append("image", file);

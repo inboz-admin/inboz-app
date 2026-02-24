@@ -16,6 +16,7 @@ import { AnalyticsModule } from 'src/resources/analytics/analytics.module';
 import { EmployeesModule } from 'src/resources/employees/employees.module';
 import { NotificationsModule } from 'src/resources/notifications/notifications.module';
 import { AssetsModule } from 'src/resources/assets/assets.module';
+import { MulterModule } from 'src/configuration/multer/multer.module';
 
 export const routes: Routes = [
   {
@@ -84,6 +85,10 @@ export const routes: Routes = [
       {
         path: '/assets',
         module: AssetsModule,
+      },
+      {
+        path: '/upload',
+        module: MulterModule,
       },
       {
         path: '/',
