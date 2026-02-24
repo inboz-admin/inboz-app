@@ -88,7 +88,6 @@ const replaceVariables = (content: string, contactData: Record<string, string> =
 const rewritePreviewImageUrls = (html: string): string => {
   const uploadBase = API_CONFIG.baseUrl.replace(/\/api\/v1\/?$/, "");
   if (!uploadBase || !import.meta.env.DEV) return html;
-  // Only rewrite in dev when backend is on different origin (e.g. localhost:4000)
   if (!uploadBase.includes("localhost") && !uploadBase.includes("127.0.0.1"))
     return html;
   const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");

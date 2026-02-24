@@ -250,6 +250,7 @@ export class CampaignStepService implements ICampaignStepService {
             `Campaign was COMPLETED, auto-reactivating to continue with new step`,
           );
           updateData.status = 'ACTIVE';
+          updateData.completedAt = null; // Clear completedAt so campaign is fully reactivated
           shouldAutoActivate = false;
           shouldQueueNewStep = true;
           break;
@@ -287,6 +288,15 @@ export class CampaignStepService implements ICampaignStepService {
         `Updated campaign ${dto.campaignId} with data:`,
         updateData,
       );
+
+      // When reactivating a COMPLETED campaign, fetch updated campaign so caller can return it (UI shows ACTIVE immediately)
+      let reactivatedCampaign: Campaign | null = null;
+      if (campaign.status === 'COMPLETED' && updateData.status === 'ACTIVE') {
+        reactivatedCampaign = (await this.campaignsRepository.findById(
+          dto.campaignId,
+          tx,
+        )) as Campaign | null;
+      }
 
       // After transaction commits, handle step scheduling and state management
       tx.afterCommit(async () => {
@@ -347,6 +357,10 @@ export class CampaignStepService implements ICampaignStepService {
       this.logger.log(
         `Step ${created.id} successfully added to campaign ${dto.campaignId}`,
       );
+      // When we reactivated a COMPLETED campaign, return campaign so UI can show ACTIVE immediately
+      if (reactivatedCampaign) {
+        return { step: created, campaign: reactivatedCampaign } as any;
+      }
       return created;
     });
   }
@@ -1102,7 +1116,7 @@ export class CampaignStepService implements ICampaignStepService {
         this.logger.log(`Reactivating COMPLETED campaign ${campaign.id}`);
         await this.campaignsRepository.update(
           { id: campaign.id },
-          { status: 'ACTIVE' },
+          { status: 'ACTIVE', completedAt: null },
         );
 
         // Queue step if it's immediate or past-due scheduled

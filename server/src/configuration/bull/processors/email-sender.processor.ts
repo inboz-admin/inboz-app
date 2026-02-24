@@ -641,8 +641,8 @@ export class EmailSenderProcessor extends WorkerHost {
         // 17. Aggregate to campaign
         await this.aggregateStepMetricsToCampaign(campaignId);
 
-        // 18. Check if campaign is completed
-        await this.checkCampaignCompletion(campaignId);
+        // 18. Check if campaign is completed (only when we just sent the LAST step's email - prevents race where S2 send marks COMPLETED before S3 sends)
+        await this.checkCampaignCompletion(campaignId, campaignStepId);
 
 
         // 19. Emit progress
@@ -760,7 +760,7 @@ export class EmailSenderProcessor extends WorkerHost {
    * Only counts steps that have emails (excludes newly added steps without emails yet)
    */
 
-  private async checkCampaignCompletion(campaignId: string): Promise<void> {
+  private async checkCampaignCompletion(campaignId: string, stepJustSentId?: string): Promise<void> {
     try {
       this.logger.log(`🔍 [FETCH] [COMPLETION CHECK] Fetching campaign by ID: ${campaignId}`);
       const campaign = await this.campaignModel.findByPk(campaignId);
@@ -778,12 +778,30 @@ export class EmailSenderProcessor extends WorkerHost {
       });
       this.logger.log(`🔍 [FETCH] [COMPLETION CHECK] Campaign steps fetched: ${steps.length} steps found`);
 
-      // Count steps that have emails (have been processed at least once)
-      // Also count steps that were processed but had 0 contacts (e.g., reply step with no replies)
-      // This excludes newly added steps that haven't been processed yet
-      let stepsProcessed = 0;
-      let totalExpectedEmails = 0;
+      // Only consider marking COMPLETED when the email we just sent is for the LAST step (highest stepOrder).
+      // This prevents the race: S2 send runs completion check and marks COMPLETED before S3's send job runs.
+      // If stepJustSentId is missing (e.g. old job), skip completion to avoid ever marking prematurely.
+      if (steps.length === 0) {
+        return;
+      }
+      if (!stepJustSentId) {
+        this.logger.debug(
+          `🔍 [COMPLETION CHECK] Skipping completion check: stepJustSentId not provided (safe skip)`,
+        );
+        return;
+      }
+      const lastStep = steps[steps.length - 1];
+      if (lastStep.id !== stepJustSentId) {
+        this.logger.debug(
+          `🔍 [COMPLETION CHECK] Skipping completion check: email was for step ${stepJustSentId}, last step is ${lastStep.id} (order ${lastStep.stepOrder})`,
+        );
+        return;
+      }
 
+      // Count steps that have at least one email record (processor has run and created emails)
+      // Do NOT count reply steps with 0 emails as "processed" - they may not have run yet (race:
+      // S2 sends → we mark COMPLETED → S3's processor job runs later → S3's send job sees COMPLETED and cancels).
+      let stepsProcessed = 0;
       for (const step of steps) {
         const stepEmailCount = await this.emailMessageModel.count({
           where: {
@@ -791,40 +809,18 @@ export class EmailSenderProcessor extends WorkerHost {
             campaignStepId: step.id,
           },
         });
-
-        if (stepEmailCount > 0) {
-          // Step has emails - count it and add to expected emails
-          stepsProcessed++;
-          totalExpectedEmails += stepEmailCount; // Use actual email count, not totalRecipients (for reply steps)
-        } else if (step.replyToStepId) {
-          // Step has no emails but is a reply step - check if it was attempted
-          // A reply step with 0 emails means it was processed but had no matching contacts
-          // Check if the previous step is completed (meaning this step was likely attempted)
-          const previousStepEmails = await this.emailMessageModel.count({
-            where: {
-              campaignId,
-              campaignStepId: step.replyToStepId,
-            },
-          });
-
-          if (previousStepEmails > 0) {
-            // Previous step has emails - this reply step was likely attempted but had 0 contacts
-            // Count it as processed but don't add to expected emails (it correctly has 0)
-            stepsProcessed++;
-            this.logger.log(
-              `🔍 [COMPLETION CHECK] Step ${step.id} (reply step) has 0 emails but previous step is processed - counting as processed`
-            );
-          }
-        }
+        if (stepEmailCount > 0) stepsProcessed++;
+      }
+      if (stepsProcessed === 0 || stepsProcessed < steps.length) {
+        return; // Not all steps have emails yet (last step's processor may not have run)
       }
 
-      if (stepsProcessed === 0) {
-        return; // No steps processed yet
-      }
-
-      if (totalExpectedEmails === 0 && stepsProcessed < steps.length) {
-        return; // Some steps haven't been processed yet
-      }
+      // Use total EmailMessage count so we never mark COMPLETED while any row is still QUEUED/SENDING.
+      // Summing per-step can race: if the 4th email for the last step is created after we read counts, we'd see 12 and mark, then the 4th send job would be cancelled.
+      const totalExpectedEmails = await this.emailMessageModel.count({
+        where: { campaignId },
+      });
+      if (totalExpectedEmails === 0) return;
 
       // Count actual processed emails from email_messages table (not aggregates)
       const processedEmails = await this.emailMessageModel.count({
@@ -861,14 +857,18 @@ export class EmailSenderProcessor extends WorkerHost {
       });
 
       // Only mark as completed if:
-      // 1. All expected emails for processed steps have been processed (sent, delivered, failed, bounced, or cancelled)
-      // 2. AND there are no remaining queued emails
-      // 3. AND there are no emails currently being sent
-      // 4. AND all steps have been processed (stepsProcessed === totalSteps)
-      // This ensures newly added steps don't cause false completion
+      // 1. Every step has at least one email (no step still waiting for its processor job)
+      // 2. All expected emails are in a terminal state
+      // 3. No QUEUED or SENDING emails remain
       const allStepsProcessed = stepsProcessed === steps.length;
+      const everyStepHasEmails = steps.length > 0 && allStepsProcessed; // allStepsProcessed already requires each step to have >0 emails
 
-      if (processedEmails >= totalExpectedEmails && queuedEmails === 0 && sendingEmails === 0 && allStepsProcessed) {
+      if (
+        everyStepHasEmails &&
+        processedEmails >= totalExpectedEmails &&
+        queuedEmails === 0 &&
+        sendingEmails === 0
+      ) {
         await this.campaignModel.update(
           { status: 'COMPLETED', completedAt: new Date() },
           { where: { id: campaignId } },

@@ -87,6 +87,8 @@ export class CampaignProcessorQueue
    * This allows adding steps to running campaigns without reprocessing all steps
    * @param delayMs Optional delay in milliseconds - if provided, job will wait before processing
    * @param stepOrder Optional step order - used to set priority (lower order = higher priority)
+   * @param extraData Optional extra data to merge into job data (e.g. replyStepDeferCount for reply-step retries)
+   * @param jobIdSuffix Optional suffix for jobId to allow multiple jobs for same step (e.g. "defer-1" for deferred reply steps)
    */
   async addNewStepJob(
     campaignId: string,
@@ -97,6 +99,8 @@ export class CampaignProcessorQueue
     stepName?: string,
     delayMs?: number, // Optional delay for scheduled steps
     stepOrder?: number, // Step order for priority calculation
+    extraData?: Record<string, unknown>,
+    jobIdSuffix?: string,
   ) {
     // Create job name from campaign name + step name
     let jobName: string | undefined;
@@ -122,7 +126,9 @@ export class CampaignProcessorQueue
     const delay = delayMs && delayMs > 0 ? delayMs : undefined;
 
     // Check for existing job with same jobId to avoid conflicts
-    const jobId = `new-step-${campaignId}-${stepId}`;
+    const jobId = jobIdSuffix
+      ? `new-step-${campaignId}-${stepId}-${jobIdSuffix}`
+      : `new-step-${campaignId}-${stepId}`;
     const conflictCheck = await this.checkJobConflict(jobId);
     
     if (conflictCheck.exists) {
@@ -166,16 +172,20 @@ export class CampaignProcessorQueue
       this.logger.log(`⚡ Queuing step job immediately (no delay specified)`);
     }
 
+    const jobData: Record<string, unknown> = {
+      campaignId,
+      stepId,
+      organizationId,
+      triggeredBy,
+      queuedAt: new Date().toISOString(),
+      name: jobName, // Job name for identification: campaign name + step name
+    };
+    if (extraData && Object.keys(extraData).length > 0) {
+      Object.assign(jobData, extraData);
+    }
     const job = await this.queue.add(
       'process-new-step',
-      {
-        campaignId,
-        stepId,
-        organizationId,
-        triggeredBy,
-        queuedAt: new Date().toISOString(),
-        name: jobName, // Job name for identification: campaign name + step name
-      },
+      jobData,
       {
         jobId, // Use consistent jobId
         delay, // If delay is provided, BullMQ will wait before processing

@@ -116,13 +116,17 @@ export class ScheduledTasksService {
 
       for (const campaign of campaigns) {
         try {
-          const totalExpectedEmails = campaign.totalRecipients * campaign.totalSteps;
+          // Use actual EmailMessage count so reply steps (fewer recipients per step) are correct.
+          // totalRecipients * totalSteps overcounts when steps have different recipient counts (e.g. S1:5, S2:4, S3:4 => 13, not 15).
+          const totalExpectedEmails = await this.emailMessageModel.count({
+            where: { campaignId: campaign.id },
+          });
 
           if (totalExpectedEmails === 0) {
-            continue; // No emails expected
+            continue; // No emails created yet
           }
 
-          // Count actual processed emails from email_messages table (exclude CANCELLED - those are from pause, not "done")
+          // Count emails in terminal state (CANCELLED and FAILED count so campaign can complete when some emails were cancelled/failed)
           const processedEmails = await this.emailMessageModel.count({
             where: {
               campaignId: campaign.id,
@@ -132,6 +136,7 @@ export class ScheduledTasksService {
                   EmailMessageStatus.DELIVERED,
                   EmailMessageStatus.FAILED,
                   EmailMessageStatus.BOUNCED,
+                  EmailMessageStatus.CANCELLED,
                 ],
               },
             },
@@ -167,8 +172,23 @@ export class ScheduledTasksService {
             },
           });
 
-          // Only mark as completed if all emails processed, none queued, none sending, AND at least one email was sent/delivered
+          // Guard: verify every step has at least one email (prevents premature completion when
+          // a later step's processor hasn't created its EmailMessage rows yet, e.g. S1 done + bounce → S2 not created → totalExpected=2, processed=2)
+          const steps = await this.campaignStepModel.findAll({
+            where: { campaignId: campaign.id },
+            attributes: ['id'],
+          });
+          let allStepsHaveEmails = steps.length > 0;
+          for (const step of steps) {
+            const stepCount = await this.emailMessageModel.count({
+              where: { campaignId: campaign.id, campaignStepId: step.id },
+            });
+            if (stepCount === 0) { allStepsHaveEmails = false; break; }
+          }
+
+          // Only mark as completed if all steps have emails, all emails processed, none queued, none sending, AND at least one email was sent/delivered
           if (
+            allStepsHaveEmails &&
             processedEmails >= totalExpectedEmails &&
             queuedEmails === 0 &&
             sendingEmails === 0 &&
@@ -180,7 +200,7 @@ export class ScheduledTasksService {
             });
             this.logger.log(
               `🎉 Campaign ${campaign.id} marked as COMPLETED ` +
-              `(${processedEmails}/${totalExpectedEmails} processed, ${sentOrDeliveredCount} sent/delivered, ${queuedEmails} queued, ${sendingEmails} sending)`
+              `(${processedEmails}/${totalExpectedEmails} processed, ${sentOrDeliveredCount} sent/delivered, ${queuedEmails} queued, ${sendingEmails} sending, ${steps.length} steps all have emails)`
             );
           }
         } catch (error) {

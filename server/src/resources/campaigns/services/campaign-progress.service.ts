@@ -109,7 +109,8 @@ export class CampaignProgressService {
       }
     }
 
-    const emailsCompleted = emailsSent + emailsBounced + emailsFailed;
+    // Include CANCELLED so progress reaches 100% when all emails are in a terminal state
+    const emailsCompleted = emailsSent + emailsBounced + emailsFailed + emailsCancelled;
     const progressPercentage =
       actualTotalExpected > 0
         ? Math.min(100, (emailsCompleted / actualTotalExpected) * 100)
@@ -180,7 +181,8 @@ export class CampaignProgressService {
       ),
     ]);
 
-    const emailsCompleted = emailsSent + emailsBounced + emailsFailed;
+    // Include CANCELLED so progress reaches 100% when campaign is completed (all emails in terminal state)
+    const emailsCompleted = emailsSent + emailsBounced + emailsFailed + emailsCancelled;
     const progressPercentage =
       totalExpectedEmails > 0
         ? Math.min(100, (emailsCompleted / totalExpectedEmails) * 100)

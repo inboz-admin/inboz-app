@@ -25,6 +25,7 @@ import { WhereOptions } from 'sequelize';
 import { CampaignContactService } from './campaign-contact.service';
 import { NotificationEventService } from 'src/resources/notifications/services/notification-event.service';
 import { Inject, forwardRef } from '@nestjs/common';
+import { EmailMessage } from '../entities/email-message.entity';
 
 @Injectable()
 export class CampaignCrudService implements ICampaignCrudService {
@@ -44,6 +45,8 @@ export class CampaignCrudService implements ICampaignCrudService {
     private readonly progressService: CampaignProgressService,
     private readonly userContextService: UserContextService,
     private readonly campaignContactService: CampaignContactService,
+    @InjectModel(EmailMessage)
+    private readonly emailMessageModel: typeof EmailMessage,
     @Inject(forwardRef(() => NotificationEventService))
     private readonly notificationEventService?: NotificationEventService,
   ) {}
@@ -201,7 +204,6 @@ export class CampaignCrudService implements ICampaignCrudService {
     currentStatus: string,
     sentOrDeliveredCount: number,
   ): Promise<boolean> {
-    // Only mark as completed if progress is 100%, status is ACTIVE or PAUSED, and at least one email was sent or delivered
     if (
       percentage < 100 ||
       (currentStatus !== 'ACTIVE' && currentStatus !== 'PAUSED') ||
@@ -212,6 +214,30 @@ export class CampaignCrudService implements ICampaignCrudService {
 
     try {
       const { Op, literal } = await import('sequelize');
+
+      // Guard: verify every campaign step has at least one email.
+      // Without this, a bounce in S1 can make progress 100% before S2's processor creates its emails.
+      const steps = await this.campaignStepModel.findAll({
+        where: { campaignId },
+        attributes: ['id'],
+      });
+      if (steps.length === 0) return false;
+
+      for (const step of steps) {
+        const count = await this.emailMessageModel.count({
+          where: { campaignId, campaignStepId: step.id },
+        });
+        if (count === 0) return false;
+      }
+
+      // Also verify no QUEUED or SENDING emails remain
+      const pendingEmails = await this.emailMessageModel.count({
+        where: {
+          campaignId,
+          status: { [Op.in]: ['QUEUED', 'SENDING'] },
+        },
+      });
+      if (pendingEmails > 0) return false;
       // Use optimistic locking with version field to prevent concurrent update conflicts
       const [updatedCount] = await (
         this.campaignsRepository as any

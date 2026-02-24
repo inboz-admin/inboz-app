@@ -20,11 +20,17 @@ import { QuotaManagementService } from 'src/common/services/quota-management.ser
 import { CampaignSchedulingService } from 'src/resources/campaigns/services/campaign-scheduling.service';
 import { MAX_SCHEDULE_DAYS } from 'src/resources/campaigns/constants/campaign.constants';
 import { QueueName } from '../enums/queue.enum';
+import { CampaignProcessorQueue } from '../queues/campaign-processor.queue';
 
 /**
  * BullMQ Processor for Campaign Processing
  * Prepares and queues individual emails for a campaign
  */
+/** Delay before retrying a reply step when the previous step has no emails yet (ms) */
+const REPLY_STEP_DEFER_DELAY_MS = 30 * 1000; // 30 seconds
+/** Max number of times to defer a reply step before giving up (avoids infinite loop) */
+const MAX_REPLY_STEP_DEFER_COUNT = 20;
+
 @Processor(QueueName.CAMPAIGN_PROCESSOR)
 export class CampaignProcessorProcessor extends WorkerHost {
   private readonly logger = new Logger(CampaignProcessorProcessor.name);
@@ -52,6 +58,7 @@ export class CampaignProcessorProcessor extends WorkerHost {
     private readonly rateLimiterService: RateLimiterService,
     private readonly quotaManagementService: QuotaManagementService,
     private readonly campaignSchedulingService: CampaignSchedulingService,
+    private readonly campaignProcessorQueue: CampaignProcessorQueue,
   ) {
     super();
     this.logger.log('CampaignProcessorProcessor initialized');
@@ -687,15 +694,22 @@ export class CampaignProcessorProcessor extends WorkerHost {
           const clickedContactIds = clickedEmails.map((email: any) => email.contactId);
 
           if (clickedContactIds.length === 0) {
+            const previousStepEmailCount = await this.emailMessageModel.count({
+              where: { campaignId: campaign.id, campaignStepId: step.replyToStepId },
+            });
+            const deferCount = (job.data.replyStepDeferCount as number) || 0;
+            if (previousStepEmailCount === 0 && deferCount < MAX_REPLY_STEP_DEFER_COUNT) {
+              this.logger.log(
+                `Reply step ${stepId} (CLICKED): previous step ${step.replyToStepId} has no emails yet. Deferring (${deferCount + 1}/${MAX_REPLY_STEP_DEFER_COUNT})`,
+              );
+              await this.campaignProcessorQueue.addNewStepJob(
+                campaignId, stepId, campaign.organizationId, 'user', campaign.name, step.name || `Step ${step.stepOrder}`,
+                REPLY_STEP_DEFER_DELAY_MS, step.stepOrder, { replyStepDeferCount: deferCount + 1 }, `defer-${deferCount + 1}`,
+              );
+              return { success: true, campaignId, stepId, queuedEmails: 0, totalContacts: 0, deferred: true, message: 'Previous step has no emails yet; re-queued with delay' };
+            }
             this.logger.warn(`No contacts clicked in step ${step.replyToStepId}, skipping step ${stepId}`);
-            return {
-              success: true,
-              campaignId,
-              stepId,
-              queuedEmails: 0,
-              totalContacts: 0,
-              message: 'No contacts clicked in the previous step, skipping',
-            };
+            return { success: true, campaignId, stepId, queuedEmails: 0, totalContacts: 0, message: 'No contacts clicked in the previous step, skipping' };
           }
 
           // Exclude contacts who replied
@@ -741,15 +755,22 @@ export class CampaignProcessorProcessor extends WorkerHost {
           const openedContactIds = openedEmails.map((email: any) => email.contactId);
 
           if (openedContactIds.length === 0) {
+            const previousStepEmailCount = await this.emailMessageModel.count({
+              where: { campaignId: campaign.id, campaignStepId: step.replyToStepId },
+            });
+            const deferCount = (job.data.replyStepDeferCount as number) || 0;
+            if (previousStepEmailCount === 0 && deferCount < MAX_REPLY_STEP_DEFER_COUNT) {
+              this.logger.log(
+                `Reply step ${stepId} (OPENED): previous step ${step.replyToStepId} has no emails yet. Deferring (${deferCount + 1}/${MAX_REPLY_STEP_DEFER_COUNT})`,
+              );
+              await this.campaignProcessorQueue.addNewStepJob(
+                campaignId, stepId, campaign.organizationId, 'user', campaign.name, step.name || `Step ${step.stepOrder}`,
+                REPLY_STEP_DEFER_DELAY_MS, step.stepOrder, { replyStepDeferCount: deferCount + 1 }, `defer-${deferCount + 1}`,
+              );
+              return { success: true, campaignId, stepId, queuedEmails: 0, totalContacts: 0, deferred: true, message: 'Previous step has no emails yet; re-queued with delay' };
+            }
             this.logger.warn(`No contacts opened emails in step ${step.replyToStepId}, skipping step ${stepId}`);
-            return {
-              success: true,
-              campaignId,
-              stepId,
-              queuedEmails: 0,
-              totalContacts: 0,
-              message: 'No contacts opened emails in the previous step, skipping',
-            };
+            return { success: true, campaignId, stepId, queuedEmails: 0, totalContacts: 0, message: 'No contacts opened emails in the previous step, skipping' };
           }
 
           // Exclude contacts who clicked
@@ -810,7 +831,48 @@ export class CampaignProcessorProcessor extends WorkerHost {
           const sentContactIds = sentEmails.map((email: any) => email.contactId);
 
           if (sentContactIds.length === 0) {
-            this.logger.warn(`No contacts were sent emails in step ${step.replyToStepId}, skipping step ${stepId}`);
+            // Previous step may not have created emails yet (reply step ran before previous step). Defer and retry.
+            const previousStepEmailCount = await this.emailMessageModel.count({
+              where: {
+                campaignId: campaign.id,
+                campaignStepId: step.replyToStepId,
+              },
+            });
+            const deferCount = (job.data.replyStepDeferCount as number) || 0;
+            if (previousStepEmailCount === 0 && deferCount < MAX_REPLY_STEP_DEFER_COUNT) {
+              this.logger.log(
+                `Reply step ${stepId} (SENT): previous step ${step.replyToStepId} has no emails yet. ` +
+                `Deferring (${deferCount + 1}/${MAX_REPLY_STEP_DEFER_COUNT}) by ${REPLY_STEP_DEFER_DELAY_MS / 1000}s`,
+              );
+              await this.campaignProcessorQueue.addNewStepJob(
+                campaignId,
+                stepId,
+                campaign.organizationId,
+                'user',
+                campaign.name,
+                step.name || `Step ${step.stepOrder}`,
+                REPLY_STEP_DEFER_DELAY_MS,
+                step.stepOrder,
+                { replyStepDeferCount: deferCount + 1 },
+                `defer-${deferCount + 1}`,
+              );
+              return {
+                success: true,
+                campaignId,
+                stepId,
+                queuedEmails: 0,
+                totalContacts: 0,
+                deferred: true,
+                message: 'Previous step has no emails yet; step re-queued with delay',
+              };
+            }
+            if (previousStepEmailCount === 0 && deferCount >= MAX_REPLY_STEP_DEFER_COUNT) {
+              this.logger.warn(
+                `Reply step ${stepId} (SENT): gave up after ${MAX_REPLY_STEP_DEFER_COUNT} defers; previous step ${step.replyToStepId} still has no emails`,
+              );
+            } else {
+              this.logger.warn(`No contacts were sent emails in step ${step.replyToStepId}, skipping step ${stepId}`);
+            }
             return {
               success: true,
               campaignId,

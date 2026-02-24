@@ -102,6 +102,7 @@ async function bootstrap() {
 
   // Use process.cwd() for static assets so they work from any run path (dev/dist)
   app.useStaticAssets(join(process.cwd(), 'public/browser'));
+  app.useStaticAssets(join(process.cwd(), 'uploads'), { prefix: '/api/v1/uploads' });
   app.useStaticAssets(join(process.cwd(), 'uploads'), { prefix: '/uploads' });
 
   // Mount Bull Board

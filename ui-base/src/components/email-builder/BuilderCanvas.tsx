@@ -75,6 +75,11 @@ function NonSortableElementRenderer({
             cssConfig={element.cssConfig}
             isSelected={isSelected}
             onClick={onSelect}
+            onResize={(width, height) => {
+              onUpdateElement({
+                config: { ...element.config, width, height } as any,
+              });
+            }}
           />
         );
       case 'button':
@@ -195,7 +200,6 @@ function NonSortableElementRenderer({
       <div 
         className="relative cursor-pointer"
         onClick={(e) => {
-          // Only select if not clicking on delete button
           if (!(e.target as HTMLElement).closest('.delete-button')) {
             e.stopPropagation();
             onSelect();
@@ -285,6 +289,11 @@ function ElementRenderer({
             cssConfig={element.cssConfig}
             isSelected={isSelected}
             onClick={onSelect}
+            onResize={(width, height) => {
+              onUpdateElement({
+                config: { ...element.config, width, height } as any,
+              });
+            }}
           />
         );
       case 'button':

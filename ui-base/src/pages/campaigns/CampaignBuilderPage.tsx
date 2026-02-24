@@ -564,11 +564,20 @@ export function CampaignBuilderPage() {
         toast.success('Step added successfully');
       }
 
-      // Fetch campaign details after toast to get latest data (scheduled emails, etc.)
-      // Small delay to ensure backend has processed the step addition
+      // When backend reactivated a COMPLETED campaign (added step to completed campaign), update local state so UI shows ACTIVE immediately
+      const addedStepResult = result as { step?: unknown; campaign?: { status?: string; completedAt?: string | null } };
+      if (addedStepResult?.campaign) {
+        setCampaign((prev) => ({
+          ...prev,
+          status: addedStepResult.campaign!.status ?? prev.status,
+          completedAt: addedStepResult.campaign!.completedAt ?? undefined,
+        }));
+      }
+
+      // Fetch campaign details to get latest data (new step in list, scheduled emails, etc.)
       setTimeout(async () => {
         await loadCampaign();
-      }, 500);
+      }, 300);
     } catch (err: any) {
       console.error('Error saving step:', err);
 
