@@ -223,7 +223,7 @@ export default function ProfilePage() {
                         onClick={() => gmailScopeService.requestGmailScopes()}
                         className="mt-2"
                       >
-                        Re-authenticate Gmail
+                        Continue with Google
                       </Button>
                     </div>
                   </div>

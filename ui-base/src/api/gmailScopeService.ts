@@ -35,12 +35,10 @@ export class GmailScopeService {
   }
 
   /**
-   * Request Gmail scopes by redirecting to Google OAuth
+   * Re-run unified Google sign-in (same as /get-started) to refresh Gmail + identity tokens.
    */
   requestGmailScopes(): void {
-    // Simply redirect to the server endpoint which will handle OAuth flow
-    const authUrl = `${API_BASE_URL}/auth/google/gmail`;
-    window.location.href = authUrl;
+    window.location.href = `${API_BASE_URL}/auth/google`;
   }
 
   /**

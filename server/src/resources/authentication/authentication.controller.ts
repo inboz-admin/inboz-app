@@ -19,7 +19,6 @@ import { ResetPasswordDto } from './dto/reset-password.dto';
 import { Public } from 'src/configuration/jwt/public.decorator';
 import { AuthGuard } from '@nestjs/passport';
 import { GoogleAuthGuard } from './guards/google-auth.guard';
-import { GoogleGmailAuthGuard } from './guards/google-gmail-auth.guard';
 import { ConfigService } from '@nestjs/config';
 import { JwtPayload } from 'src/configuration/jwt/interfaces/jwt-payload.interface';
 import { RiscService } from './services/risc.service';
@@ -75,30 +74,13 @@ export class AuthenticationController {
     );
   }
 
+  /**
+   * Legacy path: unified Google OAuth (identity + Gmail) is served from GET /google.
+   */
   @Public()
   @Get('google/gmail')
-  @UseGuards(AuthGuard('google-gmail'))
-  async googleGmailAuth() {
-    // This will redirect to Google OAuth for Gmail scopes
-  }
-
-  @Public()
-  @Get('google/gmail/callback')
-  @UseGuards(GoogleGmailAuthGuard)
-  async googleGmailCallback(@Req() req: OAuthCallbackRequest, @Res() res: Response) {
-    const frontendUrl = this.configService.get('FRONTEND_URL');
-    const result = req.user;
-
-    if (!result?.access_token) {
-      return res.redirect(
-        `${frontendUrl}/dashboard/campaigns?error=invalid_user&message=${encodeURIComponent('Invalid user data received')}`,
-      );
-    }
-
-    // Redirect back to campaigns page with tokens for authentication
-    return res.redirect(
-      `${frontendUrl}/auth/callback?token=${encodeURIComponent(result.access_token)}&refresh=${encodeURIComponent(result.refresh_token)}&gmail_authorized=true`,
-    );
+  googleGmailLegacyRedirect(@Res() res: Response) {
+    return res.redirect(302, '/api/v1/auth/google');
   }
 
   @Get('scopes')

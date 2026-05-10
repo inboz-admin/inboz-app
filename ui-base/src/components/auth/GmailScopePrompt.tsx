@@ -30,9 +30,9 @@ export function GmailScopePrompt({ onAuthorize }: GmailScopePromptProps) {
             <AlertCircle className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />
           </div>
           <div className="flex-1">
-            <CardTitle className="text-lg">Gmail Authorization Required</CardTitle>
+            <CardTitle className="text-lg">Gmail access required</CardTitle>
             <CardDescription className="mt-1">
-              To use campaign features, you need to grant Gmail access permissions.
+              Sign in with Google again to grant Gmail permissions for campaigns (same consent as at registration).
             </CardDescription>
           </div>
         </div>
@@ -59,11 +59,11 @@ export function GmailScopePrompt({ onAuthorize }: GmailScopePromptProps) {
         </div>
         <div className="pt-2">
           <Button onClick={handleAuthorize} className="w-full sm:w-auto">
-            Grant Gmail Access
+            Continue with Google
           </Button>
         </div>
         <p className="text-xs text-muted-foreground">
-          You'll be redirected to Google to authorize these permissions. Your data is secure and only used for campaign functionality.
+          You’ll be redirected to Google. Your account data is used only for campaign sending and tracking.
         </p>
       </CardContent>
     </Card>
@@ -94,11 +94,11 @@ export function GmailScopeModal({ open, onOpenChange, hasScopes, onAuthorize }: 
               <AlertCircle className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />
             </div>
             <div className="flex-1">
-              <DialogTitle className="text-lg">Gmail Authorization</DialogTitle>
+              <DialogTitle className="text-lg">Gmail access</DialogTitle>
               <DialogDescription className="mt-1">
                 {hasScopes 
-                  ? "You have granted Gmail access permissions. You can use all campaign features."
-                  : "To use campaign features, you need to grant Gmail access permissions."}
+                  ? "Gmail permissions are active. Campaign features are available."
+                  : "Continue with Google to grant Gmail permissions (same flow as signing in)."}
               </DialogDescription>
             </div>
           </div>
@@ -127,11 +127,11 @@ export function GmailScopeModal({ open, onOpenChange, hasScopes, onAuthorize }: 
             <>
               <div className="pt-2">
                 <Button onClick={handleAuthorize} className="w-full">
-                  Grant Gmail Access
+                  Continue with Google
                 </Button>
               </div>
               <p className="text-xs text-muted-foreground">
-                You'll be redirected to Google to authorize these permissions. Your data is secure and only used for campaign functionality.
+                You’ll be redirected to Google. Your account data is used only for campaign sending and tracking.
               </p>
             </>
           )}

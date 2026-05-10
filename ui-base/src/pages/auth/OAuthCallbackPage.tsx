@@ -32,15 +32,6 @@ export default function OAuthCallbackPage() {
         const token = searchParams.get("token");
         const refreshToken = searchParams.get("refresh");
         const error = searchParams.get("error");
-        const gmailAuthorized = searchParams.get("gmail_authorized");
-
-        // If this is a Gmail authorization callback, redirect to campaigns
-        if (gmailAuthorized === "true") {
-          setStatus("success");
-          setMessage("Gmail access granted! Redirecting to campaigns...");
-          setTimeout(() => navigate("/dashboard/campaigns?gmail_authorized=true"), 1500);
-          return;
-        }
 
         if (error) {
           setStatus("error");

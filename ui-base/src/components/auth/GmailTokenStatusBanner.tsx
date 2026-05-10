@@ -87,7 +87,7 @@ export function GmailTokenStatusBanner() {
       <div className="flex items-center gap-2">
         <AlertCircle className="h-4 w-4 text-destructive flex-shrink-0" />
         <p className="text-sm text-destructive flex-1">
-          Gmail connection expired. Please re-authenticate.
+          Gmail connection expired. Sign in with Google again to reconnect.
         </p>
         <Button
           variant="default"

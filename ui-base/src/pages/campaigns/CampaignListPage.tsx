@@ -25,7 +25,6 @@ import { roleService } from '@/api/roleService';
 import { ActionType, ModuleName } from '@/api/roleTypes';
 import { gmailScopeService } from '@/api/gmailScopeService';
 import { GmailScopeModal } from '@/components/auth/GmailScopePrompt';
-import { useSearchParams } from 'react-router-dom';
 import { ShieldCheck, ShieldAlert } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
@@ -60,7 +59,6 @@ export function CampaignListPage() {
   const [moduleActions, setModuleActions] = useState<ActionType[]>([]);
   const [hasGmailScopes, setHasGmailScopes] = useState<boolean | null>(null);
   const [checkingScopes, setCheckingScopes] = useState(true);
-  const [searchParams, setSearchParams] = useSearchParams();
   const [gmailModalOpen, setGmailModalOpen] = useState(false);
 
   const handleDeleteClick = (campaign: Campaign) => {
@@ -169,28 +167,6 @@ export function CampaignListPage() {
 
     checkScopes();
   }, [user]);
-
-  // Check for successful Gmail authorization from URL params
-  useEffect(() => {
-    const gmailAuthorized = searchParams.get('gmail_authorized');
-    if (gmailAuthorized === 'true') {
-      toast.success('Gmail access granted! You can now use campaign features.');
-      setSearchParams({}, { replace: true });
-      // Re-check scopes
-      gmailScopeService.checkGmailScopes().then((response) => {
-        if (response.success && response.data) {
-          // Handle nested response structure
-          const data = response.data as any;
-          const scopeData = (data?.success !== undefined && data?.data) 
-            ? data.data 
-            : response.data;
-          if (scopeData && typeof scopeData.hasAllGmailScopes === 'boolean') {
-            setHasGmailScopes(scopeData.hasAllGmailScopes);
-          }
-        }
-      });
-    }
-  }, [searchParams, setSearchParams]);
 
   // Fetch module actions when user is available
   useEffect(() => {
@@ -425,9 +401,9 @@ export function CampaignListPage() {
                 </Button>
               </TooltipTrigger>
               <TooltipContent>
-                {hasGmailScopes === true 
-                  ? "Gmail permissions granted - Click to view details"
-                  : "Gmail permissions required - Click to grant access"}
+                {hasGmailScopes === true
+                  ? "Gmail connected — click for details"
+                  : "Gmail required — click to continue with Google"}
               </TooltipContent>
             </Tooltip>
             <Button 
